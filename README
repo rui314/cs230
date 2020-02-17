@@ -1,0 +1,13 @@
+Prepare podcast files
+---------------------
+
+Run `./get-feed-urls.py > urls` and then `./get-mp3s.py urls`.
+MP3 files are downloaded to `audio` subdirectory.
+
+
+Prepare noise samples
+---------------------
+
+ - Download https://people.xiph.org/~jm/demo/rnnoise/rnnoise_contributions.tar.gz
+ - Extract raw files from the tar archive
+ - Convert raw files to wav with: `parallel 'ffmpeg -f s16le -ar 48k -ac 1 -i {} {.}.wav' ::: *.raw`
