@@ -5,7 +5,8 @@ import numpy as np
 import soundfile as sf
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.layers import Conv1D
+from tensorflow.keras.layers import Conv1D, Input
+from tensorflow.keras.models import Model
 
 nsamples = 16000 * 30
 
@@ -42,10 +43,12 @@ def ulaw_reverse(ys):
 
 # Create a keras model
 def get_model():
-    model = keras.Sequential()
-    model.add(Conv1D(filters=512, kernel_size=2, padding='same', input_shape=(nsamples,1), activation='tanh'))
-    model.add(Conv1D(filters=512, kernel_size=2, padding='same', activation='tanh'))
-    model.add(Conv1D(filters=256, kernel_size=1, activation='softmax'))
+    inputs = Input(shape=(nsamples,1))
+    f = Conv1D(filters=512, kernel_size=2, padding='same', activation='tanh')(inputs)
+    f = Conv1D(filters=512, kernel_size=2, padding='same', activation='tanh')(f)
+    f = Conv1D(filters=256, kernel_size=1, activation='softmax')(f)
+
+    model = Model(inputs = inputs, outputs=f)
     model.compile(optimizer='rmsprop',
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
