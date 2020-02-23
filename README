@@ -17,7 +17,7 @@ Prepare noise samples
  - Extract raw files from the tar archive
 
 # Convert raw files to wav
-$ parallel 'ffmpeg -f s16le -ar 48k -ac 1 -i {} {.}.wav' ::: *.raw
+$ parallel 'sox -r 48k -e signed -b 16 -c 1 {} -r 16k {.}.wav' ::: *.raw
 
 # Convert mp3 files to wav
 $ parallel 'ffmpeg -i {} {.}.wav' ::: *.mp3
