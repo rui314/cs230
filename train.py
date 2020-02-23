@@ -5,6 +5,7 @@ import numpy as np
 import soundfile as sf
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.keras.layers import Conv1D
 
 nsamples = 16000 * 30
 
@@ -29,7 +30,9 @@ def get_samples(files):
 def ulaw(xs):
     u = 255
     xs = np.sign(xs) * np.log(u * np.absolute(xs) + 1) / np.log(u + 1)
-    return np.rint(xs * 256).astype(int)
+    xs = np.rint(xs * 256)
+    xs = np.clip(xs, -128, 127)
+    return np.rint(xs).astype(int)
 
 # f^{-1}(y) = sgn(y) * (1 / u) * ((1 + u)^|y| - 1) where u = 255
 def ulaw_reverse(ys):
@@ -40,26 +43,28 @@ def ulaw_reverse(ys):
 # Create a keras model
 def get_model():
     model = keras.Sequential()
-    model.add(keras.layers.Input(shape=(32,)))
-    model.add(keras.layers.Dense(1, input_shape=(32,), activation='relu'))
-    model.compile(optimizer=tf.keras.optimizers.Adam(0.01),
-                  loss=tf.keras.losses.MeanSquaredError(),
-                  metrics=['mse'])
-
+    model.add(Conv1D(filters=512, kernel_size=2, padding='same', input_shape=(nsamples,1), activation='tanh'))
+    model.add(Conv1D(filters=512, kernel_size=2, padding='same', activation='tanh'))
+    model.add(Conv1D(filters=256, kernel_size=1, activation='softmax'))
+    model.compile(optimizer='rmsprop',
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
     model.summary()
     return model
 
 model = get_model()
 
 def train(clean, noisy):
-#    mixed = np.clip(clean + noisy, -1, 1)
+    #    mixed = np.clip(clean + noisy, -1, 1)
 
     #    clean = ulaw(clean)
     #    noisy = ulaw(noisy)
     #    mixed = ulaw(mixed)
 
-    print(clean[:32], clean[0])
-    model.fit(x=np.reshape(clean[:32], (1, 32)), y=np.array([clean[0]]))
+    print(clean[:8], clean[0])
+    model.fit(x=np.reshape(clean[:8], (1, 8)), y=np.array([clean[0]]))
+
+x = np.empty(0)
 
 # Run train()
 while len(clean_files) > 0 and len(noisy_files) > 0:
@@ -68,9 +73,24 @@ while len(clean_files) > 0 and len(noisy_files) > 0:
     clean, clean_files = get_samples(clean_files)
     noisy, noisy_files = get_samples(noisy_files)
 
-    if clean.shape[0] < noisy.shape[0]:
-        noisy.resize(clean.shape)
-    else:
-        clean.resize(noisy.shape)
+    if clean.shape[0] != nsamples or noisy.shape[0] != nsamples:
+        break
 
-    train(clean, noisy)
+    x = np.append(x, ulaw(clean))
+    break
+
+x = np.reshape(x, (-1, nsamples, 1))
+y = keras.utils.to_categorical(y=x, num_classes=256)
+print('x=', x)
+print('y=', y)
+
+model.fit(x=x, y=y, batch_size=32, epochs=10)
+
+print(list(x[0:1].flatten().astype(int))[:100])
+
+z = np.argmax(model.predict(x[0:1])[0], axis=1)
+z = z + np.where(z > 127, -256, 0)
+print(list(z)[:100])
+# print(x[1:2], np.argmax(model.predict(x[1:2])))
+# print(x[2:3], np.argmax(model.predict(x[2:3])))
+# print(x[3:4], np.argmax(model.predict(x[3:4])))
