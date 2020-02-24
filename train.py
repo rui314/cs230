@@ -2,6 +2,7 @@
 from datetime import datetime
 from pathlib import Path
 import numpy as np
+import sys
 import soundfile as sf
 import tensorflow as tf
 from tensorflow import keras
@@ -50,11 +51,11 @@ def get_model():
 
     for _ in range(2): # number of stacks
         skip_connections = []
-        for layer in range(1, 9): # number of layers
+        for layer in range(1, 10): # number of layers
             res = f
             f = Conv1D(filters=channels, kernel_size=2, padding='causal', dilation_rate=2**layer, activation='linear')(f)
-            f1 = Conv1D(filters=channels, kernel_size=1, padding='same', activation='tanh')(f)
-            f2 = Conv1D(filters=channels, kernel_size=1, padding='same', activation='sigmoid')(f)
+            f1 = Conv1D(filters=channels, kernel_size=1, activation='tanh')(f)
+            f2 = Conv1D(filters=channels, kernel_size=1, activation='sigmoid')(f)
             f = f1 * f2
             skip_connections.append(f)
             f = f + res
@@ -70,7 +71,6 @@ def get_model():
     model.compile(optimizer='rmsprop',
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
-    model.summary()
     return model
 
 model = get_model()
@@ -87,31 +87,33 @@ def train(clean, noisy):
 
 x = np.empty(0)
 
-# Run train()
 while len(clean_files) > 0 and len(noisy_files) > 0:
     print(datetime.now(), len(clean_files), len(noisy_files), flush=True)
-
     clean, clean_files = get_samples(clean_files)
     noisy, noisy_files = get_samples(noisy_files)
-
     if clean.shape[0] != sample_size or noisy.shape[0] != sample_size:
         break
-
     x = np.append(x, ulaw(clean))
     break
 
-x = np.reshape(x, (-1, sample_size, 1))
-y = keras.utils.to_categorical(y=x, num_classes=256)
-print('x=', x)
-print('y=', y)
+if sys.argv[1] == 'train':
+    x = np.reshape(x, (-1, sample_size, 1))
+    y = keras.utils.to_categorical(y=x, num_classes=256)
+    print('x=', x)
+    print('y=', y)
 
-model.fit(x=x, y=y, batch_size=32, epochs=1000)
+    model.fit(x=x, y=y, batch_size=32, epochs=1000)
+    model.save('./saved_model/my_model')
+    exit(0)
 
-print(list(x[0:1].flatten().astype(int))[:100])
+if sys.argv[1] == 'gen':
+    model = tf.keras.models.load_model('saved_model/my_model')
 
-z = np.argmax(model.predict(x[0:1])[0], axis=1)
-z = z + np.where(z > 127, -256, 0)
-print(list(z)[:100])
-# print(x[1:2], np.argmax(model.predict(x[1:2])))
-# print(x[2:3], np.argmax(model.predict(x[2:3])))
-# print(x[3:4], np.argmax(model.predict(x[3:4])))
+    x = np.reshape(x, (-1, sample_size, 1))
+    z = np.argmax(model.predict(x)[0], axis=1)
+    z = z + np.where(z > 127, -256, 0)
+    print(list(z)[:100])
+    exit(0)
+
+print('argv[1] must be either "train" or "gen"')
+exit(1)
