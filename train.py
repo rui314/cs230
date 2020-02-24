@@ -5,25 +5,25 @@ import numpy as np
 import soundfile as sf
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.layers import Conv1D, Input
+from tensorflow.keras.layers import Conv1D, Input, Add
 from tensorflow.keras.models import Model
 
-nsamples = 16000 * 30
+sample_size = 16000 * 5
 
 # Get files for training
 clean_files = [str(path) for path in Path('LibriSpeech/dev-clean').glob('**/*.flac')]
 noisy_files = [str(path) for path in Path('rnnoise_contributions').glob('*.wav')]
 
 # We assume clean samples are 1-channel 16kHz
-# This function returns a 30 second of clean audio.
+# This function returns a 5 second of clean audio.
 def get_samples(files):
     data = np.empty(0)
-    while len(files) > 0 and data.shape[0] < nsamples:
+    while len(files) > 0 and data.shape[0] < sample_size:
         file = files.pop()
         data2, samplerate = sf.read(file)
         assert samplerate == 16000
         data = np.append(data, data2)
-    return data[:nsamples], files
+    return data[:sample_size], files
 
 # https://en.wikipedia.org/wiki/%CE%9C-law_algorithm
 #
@@ -43,12 +43,30 @@ def ulaw_reverse(ys):
 
 # Create a keras model
 def get_model():
-    inputs = Input(shape=(nsamples,1))
-    f = Conv1D(filters=512, kernel_size=2, padding='same', activation='tanh')(inputs)
-    f = Conv1D(filters=512, kernel_size=2, padding='same', activation='tanh')(f)
+    channels = 256
+
+    inputs = Input(shape=(sample_size,1))
+    f = Conv1D(filters=channels, kernel_size=1)(inputs)
+
+    for _ in range(2): # number of stacks
+        skip_connections = []
+        for layer in range(1, 9): # number of layers
+            res = f
+            f = Conv1D(filters=channels, kernel_size=2, padding='causal', dilation_rate=2**layer, activation='linear')(f)
+            f1 = Conv1D(filters=channels, kernel_size=1, padding='same', activation='tanh')(f)
+            f2 = Conv1D(filters=channels, kernel_size=1, padding='same', activation='sigmoid')(f)
+            f = f1 * f2
+            skip_connections.append(f)
+            f = f + res
+
+        skip_connections.append(f)            
+        f = Add()(skip_connections)
+        f = Conv1D(filters=256, kernel_size=1, activation='tanh')(f)
+
+    f = Conv1D(filters=256, kernel_size=1, activation='tanh')(f)
     f = Conv1D(filters=256, kernel_size=1, activation='softmax')(f)
 
-    model = Model(inputs = inputs, outputs=f)
+    model = Model(inputs=inputs, outputs=f)
     model.compile(optimizer='rmsprop',
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
@@ -76,18 +94,18 @@ while len(clean_files) > 0 and len(noisy_files) > 0:
     clean, clean_files = get_samples(clean_files)
     noisy, noisy_files = get_samples(noisy_files)
 
-    if clean.shape[0] != nsamples or noisy.shape[0] != nsamples:
+    if clean.shape[0] != sample_size or noisy.shape[0] != sample_size:
         break
 
     x = np.append(x, ulaw(clean))
     break
 
-x = np.reshape(x, (-1, nsamples, 1))
+x = np.reshape(x, (-1, sample_size, 1))
 y = keras.utils.to_categorical(y=x, num_classes=256)
 print('x=', x)
 print('y=', y)
 
-model.fit(x=x, y=y, batch_size=32, epochs=10)
+model.fit(x=x, y=y, batch_size=32, epochs=1000)
 
 print(list(x[0:1].flatten().astype(int))[:100])
 
