@@ -6,25 +6,25 @@ import sys
 import soundfile as sf
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.layers import Conv1D, Input, Add, Dropout
+from tensorflow.keras.layers import Conv1D, Input, Add, Dropout, Dense
 from tensorflow.keras.models import Model
-
-sample_size = 16000 * 5
-
-# Get files for training
-clean_files = [str(path) for path in Path('LibriSpeech/dev-clean').glob('**/*.flac')]
-noisy_files = [str(path) for path in Path('rnnoise_contributions').glob('*.wav')]
+from tensorflow.keras.callbacks import ModelCheckpoint
 
 # We assume clean samples are 1-channel 16kHz
-# This function returns a 5 second of clean audio.
-def get_samples(files):
-    data = np.empty(0)
-    while len(files) > 0 and data.shape[0] < sample_size:
+def get_sample():
+    files = [str(path) for path in Path('LibriSpeech/dev-clean').glob('**/*.flac')]
+    data = []
+    limit = 16000 * 60 * 60
+    total = 0
+    while total < limit:
         file = files.pop()
-        data2, samplerate = sf.read(file)
+        x, samplerate = sf.read(file)
         assert samplerate == 16000
-        data = np.append(data, data2)
-    return data[:sample_size], files
+        total += len(x)
+        data.append(x)
+
+    data = np.concatenate(data)
+    return data[:limit]
 
 # https://en.wikipedia.org/wiki/%CE%9C-law_algorithm
 #
@@ -45,31 +45,25 @@ def ulaw_reverse(ys):
 # Create a keras model
 def get_model():
     channels = 256
+    num_layers = 14
 
-    inputs = Input(shape=(sample_size,1))
-    f = Conv1D(filters=channels, kernel_size=1)(inputs)
+    inputs = Input(shape=(None, 1))
+    x = Conv1D(filters=channels, kernel_size=1)(inputs)
 
-    for _ in range(2): # number of stacks
-        skip_connections = []
-        for layer in range(10): # number of layers
-            f = Dropout(.05)(f)
-            res = f
-            f = Conv1D(filters=channels, kernel_size=2, padding='same', dilation_rate=2**layer, activation='linear')(f)
-            f1 = Conv1D(filters=channels, kernel_size=1, activation='tanh')(f)
-            f2 = Conv1D(filters=channels, kernel_size=1, activation='sigmoid')(f)
-            f = f1 * f2
-            skip_connections.append(f)
-            f = f + res
+    for layer in range(num_layers):
+        res = x
+        x = Conv1D(filters=channels, kernel_size=2, padding='causal', dilation_rate=2**layer, activation='linear')(x)
+        x1 = Conv1D(filters=channels, kernel_size=1, activation='tanh')(x)
+        x2 = Conv1D(filters=channels, kernel_size=1, activation='sigmoid')(x)
+        x = x1 * x2 + res
+        x = Dropout(0.05)(x)
 
-        skip_connections.append(f)            
-        f = Add()(skip_connections)
-        f = Conv1D(filters=256, kernel_size=1, activation='tanh')(f)
+    x = Dense(256, activation='tanh')(x)
+    x = Dense(256, activation='tanh')(x)
+    x = Dense(256, activation='softmax')(x)
 
-    f = Conv1D(filters=256, kernel_size=1, activation='tanh')(f)
-    f = Conv1D(filters=256, kernel_size=1, activation='softmax')(f)
-
-    model = Model(inputs=inputs, outputs=f)
-    model.compile(optimizer=keras.optimizers.Adam(),
+    model = Model(inputs=inputs, outputs=x)
+    model.compile(optimizer='rmsprop',
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
     return model
@@ -77,58 +71,22 @@ def get_model():
 mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
     model = get_model()
-x = []
-y = []
 
-i = 0
-while len(clean_files) > 0 and len(noisy_files) > 0:
-    print(datetime.now(), len(clean_files), len(noisy_files), flush=True)
-    clean, clean_files = get_samples(clean_files)
-    noisy, noisy_files = get_samples(noisy_files)
-    if clean.shape[0] != sample_size or noisy.shape[0] != sample_size:
-        break
-    x.append(ulaw(np.clip(clean + noisy, -1, 1)))
-    y.append(ulaw(clean))
-    i += 1
-    if i == 30:
-        break
+x = ulaw(get_sample())
+y = np.concatenate([[0], x[:-1]])
 
-x = np.concatenate(x)
-y = np.concatenate(y)
+num_samples = 16000 * 30
 
-if sys.argv[1] == 'train':
-    # x = x[:x.shape[0] // 2]
-    # y = y[:y.shape[0] // 2]
+x = np.reshape(x, (num_samples, -1, 1))
+y = np.reshape(y, (num_samples, -1, 1))
 
-    x = np.reshape(x, (-1, sample_size, 1))
-    y = np.reshape(y, (-1, sample_size, 1))
+y = keras.utils.to_categorical(y=y, num_classes=256)
 
-    y = keras.utils.to_categorical(y=y, num_classes=256)
+checkpoint = ModelCheckpoint(filepath='./saved_model/model-{epoch:02d}.hdf5',
+                             verbose=1,
+                             save_best_only=False,
+                             save_weights_only=False,
+                             mode='auto',
+                             period=1)
 
-    model.fit(x=x, y=y, batch_size=2, epochs=10000)
-    model.save('./saved_model/my_model')
-    exit(0)
-
-if sys.argv[1] == 'gen':
-    model = tf.keras.models.load_model('saved_model/my_model')
-
-    x = x[x.shape[0] // 2:]
-    y = y[y.shape[0] // 2:]
-
-    for i in range(50):
-        x2 = x[i * sample_size : (i + 1) * sample_size]
-        y2 = y[i * sample_size : (i + 1) * sample_size]
-
-        x3 = np.reshape(x2, (-1, sample_size, 1))
-        z = model.predict(x3)
-        z = np.argmax(z[0], axis=1)
-        z = z + np.where(z > 127, -256, 0)
-
-        sf.write(f'out/out-mixed{i}.wav', ulaw_reverse(x2), 16000)
-        sf.write(f'out/out-clean{i}.wav', ulaw_reverse(y2), 16000)
-        sf.write(f'out/out-denoised{i}.wav', ulaw_reverse(z), 16000)
-
-    exit(0)
-
-print('argv[1] must be either "train" or "gen"')
-exit(1)
+model.fit(x=x, y=y, batch_size=32, epochs=10, callbacks=[checkpoint])
