@@ -10,21 +10,38 @@ from tensorflow.keras.layers import Conv1D, Input, Add, Dropout, Dense
 from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import ModelCheckpoint
 
+batch_size = 4
+
 # We assume clean samples are 1-channel 16kHz
-def get_sample():
+def generator():
     files = [str(path) for path in Path('LibriSpeech/dev-clean').glob('**/*.flac')]
-    data = []
-    limit = 16000 * 60 * 30
-    total = 0
-    while total < limit:
+    maxlen = 16000
+
+    xs = np.array([])
+    ys = np.array([])
+
+    while True:
         file = files.pop()
         x, samplerate = sf.read(file)
         assert samplerate == 16000
-        total += len(x)
-        data.append(x)
 
-    data = np.concatenate(data)
-    return data[:limit]
+        if len(x) > maxlen:
+            x = x[:maxlen]
+
+        x = ulaw(x)
+        y = np.concatenate([[0], x[:-1]])
+        y = keras.utils.to_categorical(y=y, num_classes=256)
+
+        x = np.reshape(x, (1, -1, 1))
+        y = np.reshape(y, (1, -1, 256))
+
+        yield x, y
+
+
+        # if len(xs) == batch_size:
+        #     yield xs, ys
+        #     xs = []
+        #     ys = []
 
 # https://en.wikipedia.org/wiki/%CE%9C-law_algorithm
 #
@@ -72,16 +89,6 @@ mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
     model = get_model()
 
-x = ulaw(get_sample())
-y = np.concatenate([[0], x[:-1]])
-
-sample_size = 16000 * 5
-
-x = np.reshape(x, (-1, sample_size, 1))
-y = np.reshape(y, (-1, sample_size, 1))
-
-y = keras.utils.to_categorical(y=y, num_classes=256)
-
 checkpoint = ModelCheckpoint(filepath='./saved_model/model-{epoch:02d}.hdf5',
                              verbose=1,
                              save_best_only=False,
@@ -89,4 +96,4 @@ checkpoint = ModelCheckpoint(filepath='./saved_model/model-{epoch:02d}.hdf5',
                              mode='auto',
                              period=1)
 
-model.fit(x=x, y=y, batch_size=4, epochs=20, callbacks=[checkpoint])
+model.fit(x=generator(), steps_per_epoch=10000, callbacks=[checkpoint])
