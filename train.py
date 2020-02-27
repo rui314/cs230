@@ -14,34 +14,30 @@ batch_size = 4
 
 # We assume clean samples are 1-channel 16kHz
 def generator():
-    files = [str(path) for path in Path('LibriSpeech/dev-clean').glob('**/*.flac')]
-    maxlen = 16000
+    files = [str(path) for path in Path('LibriSpeech/train-other-500').glob('**/*.flac')]
+    sample_size = 16000 * 5
+    total = batch_size * sample_size
+    num_classes = 256
 
-    xs = np.array([])
-    ys = np.array([])
+    data = np.empty(0)
+    count = 0
 
     while True:
-        file = files.pop()
-        x, samplerate = sf.read(file)
+        file = files[count % len(files)]
+        samples, samplerate = sf.read(file)
         assert samplerate == 16000
+        data = np.append(data, samples)
 
-        if len(x) > maxlen:
-            x = x[:maxlen]
+        if len(data) >= total:
+            x = ulaw(data[:total])
+            data = data[total:]
 
-        x = ulaw(x)
-        y = np.concatenate([[0], x[:-1]])
-        y = keras.utils.to_categorical(y=y, num_classes=256)
+            y = np.concatenate([[0], x[:-1]])
+            y = keras.utils.to_categorical(y=y, num_classes=num_classes)
 
-        x = np.reshape(x, (1, -1, 1))
-        y = np.reshape(y, (1, -1, 256))
-
-        yield x, y
-
-
-        # if len(xs) == batch_size:
-        #     yield xs, ys
-        #     xs = []
-        #     ys = []
+            x = np.reshape(x, (batch_size, sample_size, 1))
+            y = np.reshape(y, (batch_size, sample_size, num_classes))
+            yield x, y
 
 # https://en.wikipedia.org/wiki/%CE%9C-law_algorithm
 #
@@ -96,4 +92,4 @@ checkpoint = ModelCheckpoint(filepath='./saved_model/model-{epoch:02d}.hdf5',
                              mode='auto',
                              period=1)
 
-model.fit(x=generator(), steps_per_epoch=10000, callbacks=[checkpoint])
+model.fit(x=generator(), steps_per_epoch=1000, epochs=10000, callbacks=[checkpoint])
