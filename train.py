@@ -74,7 +74,9 @@ def get_model():
                   metrics=['accuracy'])
     return model
 
-model = get_model()
+mirrored_strategy = tf.distribute.MirroredStrategy()
+with mirrored_strategy.scope():
+    model = get_model()
 x = []
 y = []
 
@@ -88,7 +90,7 @@ while len(clean_files) > 0 and len(noisy_files) > 0:
     x.append(ulaw(np.clip(clean + noisy, -1, 1)))
     y.append(ulaw(clean))
     i += 1
-    if i == 500:
+    if i == 30:
         break
 
 x = np.concatenate(x)
@@ -103,7 +105,7 @@ if sys.argv[1] == 'train':
 
     y = keras.utils.to_categorical(y=y, num_classes=256)
 
-    model.fit(x=x, y=y, batch_size=1, epochs=100)
+    model.fit(x=x, y=y, batch_size=2, epochs=10000)
     model.save('./saved_model/my_model')
     exit(0)
 
