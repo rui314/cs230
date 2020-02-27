@@ -14,7 +14,7 @@ from tensorflow.keras.callbacks import ModelCheckpoint
 def get_sample():
     files = [str(path) for path in Path('LibriSpeech/dev-clean').glob('**/*.flac')]
     data = []
-    limit = 16000 * 60 * 60
+    limit = 16000 * 60 * 30
     total = 0
     while total < limit:
         file = files.pop()
@@ -44,7 +44,7 @@ def ulaw_reverse(ys):
 
 # Create a keras model
 def get_model():
-    channels = 256
+    channels = 128
     num_layers = 14
 
     inputs = Input(shape=(None, 1))
@@ -75,10 +75,10 @@ with mirrored_strategy.scope():
 x = ulaw(get_sample())
 y = np.concatenate([[0], x[:-1]])
 
-num_samples = 16000 * 30
+sample_size = 16000 * 5
 
-x = np.reshape(x, (num_samples, -1, 1))
-y = np.reshape(y, (num_samples, -1, 1))
+x = np.reshape(x, (-1, sample_size, 1))
+y = np.reshape(y, (-1, sample_size, 1))
 
 y = keras.utils.to_categorical(y=y, num_classes=256)
 
@@ -89,4 +89,4 @@ checkpoint = ModelCheckpoint(filepath='./saved_model/model-{epoch:02d}.hdf5',
                              mode='auto',
                              period=1)
 
-model.fit(x=x, y=y, batch_size=32, epochs=10, callbacks=[checkpoint])
+model.fit(x=x, y=y, batch_size=4, epochs=20, callbacks=[checkpoint])
