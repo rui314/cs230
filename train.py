@@ -12,6 +12,8 @@ from tensorflow.keras.layers import Conv1D, Input, Add, Dropout, Dense, Activati
 from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import ModelCheckpoint
 
+random.seed()
+
 batch_size = 4
 initial_epoch = 0
 
@@ -67,23 +69,18 @@ def get_model():
 
     inputs = Input(shape=(None, 1))
     x = Conv1D(filters=channels, kernel_size=1)(inputs)
-    skip_connections = []
 
     for i in range(num_layers):
         res = x
         x = Conv1D(filters=channels, kernel_size=2, padding='causal', dilation_rate=2**i, activation='linear')(x)
         x1 = Conv1D(filters=channels, kernel_size=1, activation='tanh')(x)
         x2 = Conv1D(filters=channels, kernel_size=1, activation='sigmoid')(x)
-        x = x1 * x2
-        skip_connections.append(Dropout(0.05)(x))
-        x = x + res
+        x = x1 * x2 + res
         x = Dropout(0.05)(x)
 
-    x = Add()(skip_connections)
     x = Activation('relu')(x)
     x = Conv1D(filters=channels, kernel_size=1, activation='relu')(x)
-    x = Dense(channels)(x)
-    x = Dense(channels, activation='softmax')(x)
+    x = Conv1D(filters=channels, kernel_size=1, activation='softmax')(x)
 
     model = Model(inputs=inputs, outputs=x)
     model.compile(optimizer='rmsprop',
