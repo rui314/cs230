@@ -13,6 +13,12 @@ from tensorflow.keras.callbacks import ModelCheckpoint
 
 sample_size = 16384
 
+# f^{-1}(y) = sgn(y) / u * ((1 + u)^|y| - 1) where u = 255
+def ulaw_reverse(ys):
+    u = 255
+    ys = ys.astype(float) / 256
+    return np.sign(ys) / u * ((1 + u) ** np.abs(ys) - 1)
+
 def choose(dist):
     for i in range(len(dist)):
         if random.uniform(0, 1) < dist[i]:
@@ -41,5 +47,5 @@ for i in range(size):
     print(y, flush=True)
 
     if i % 100 == 0:
-        print(i, flush=True)
+        print('*** ', i, flush=True)
         sf.write(f'out.wav', ulaw_reverse(ys), 16000)

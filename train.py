@@ -56,12 +56,6 @@ def ulaw(xs):
     xs = np.clip(xs, -128, 127)
     return np.rint(xs).astype(int)
 
-# f^{-1}(y) = sgn(y) / u * ((1 + u)^|y| - 1) where u = 255
-def ulaw_reverse(ys):
-    u = 255
-    ys = ys.astype(float) / 256
-    return np.sign(ys) / u * ((1 + u) ** np.abs(ys) - 1)
-
 # Create a keras model
 def get_model():
     channels = 256
