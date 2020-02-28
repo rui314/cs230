@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 import sys
+import random
 import soundfile as sf
 import tensorflow as tf
 from tensorflow import keras
@@ -15,6 +16,8 @@ batch_size = 4
 # We assume clean samples are 1-channel 16kHz
 def generator():
     files = [str(path) for path in Path('LibriSpeech/train-other-500').glob('**/*.flac')]
+    random.shuffle(files)
+
     sample_size = 16000 * 5
     total = batch_size * sample_size
     num_classes = 256
