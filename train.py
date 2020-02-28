@@ -99,9 +99,9 @@ with mirrored_strategy.scope():
 if len(sys.argv) == 2:
     path = sys.argv[1]
     model.load_weights(path)
-    initial_epoch = int(re.match('.*/model-(\d+).hdf5', path).group(1))
+    initial_epoch = int(re.match('.*/weights-(\d+).hdf5', path).group(1))
 
-checkpoint = ModelCheckpoint(filepath='./saved_model/model-{epoch:03d}.hdf5',
+checkpoint = ModelCheckpoint(filepath='./saved_model/weights-{epoch:03d}.hdf5',
                              verbose=1,
                              save_best_only=False,
                              save_weights_only=True,
