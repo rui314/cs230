@@ -16,7 +16,7 @@ batch_size = 4
 initial_epoch = 0
 
 # We assume clean samples are 1-channel 16kHz
-def generate_inputs():
+def generator():
     files = [str(path) for path in Path('LibriSpeech/train-other-500').glob('**/*.flac')]
     random.shuffle(files)
 
@@ -96,61 +96,21 @@ mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
     model = get_model()
 
+if len(sys.argv) == 2:
+    path = sys.argv[1]
+    model.load_weights(path)
+    initial_epoch = int(re.match('.*/model-(\d+).hdf5', path).group(1))
 
-def train():
-    if len(sys.argv) == 3:
-        path = sys.argv[2]
-        model.load_weights(path)
-        initial_epoch = int(re.match('.*/model-(\d+).hdf5', path).group(1))
+checkpoint = ModelCheckpoint(filepath='./saved_model/model-{epoch:03d}.hdf5',
+                             verbose=1,
+                             save_best_only=False,
+                             save_weights_only=True,
+                             period=1)
 
-        checkpoint = ModelCheckpoint(filepath='./saved_model/model-{epoch:03d}.hdf5',
-                                     verbose=1,
-                                     save_best_only=False,
-                                     save_weights_only=True,
-                                     period=1)
+model.save('./saved_model/saved_model', save_format='tf')
 
-        model.fit(x=generate_inputs(),
-                  steps_per_epoch=100,
-                  initial_epoch=initial_epoch,
-                  epochs=100000,
-                  callbacks=[checkpoint])
-
-def generate_audio():
-    sample_size = 16384
-
-    def choose(dist):
-        for i in range(len(dist)):
-            if random.uniform(0, 1) < dist[i]:
-                return i
-            return np.argmax(dist)
-
-    model.load_weights(sys.argv[2])
-    size = 16000 * 10
-    ys = np.zeros(size)
-
-    x = np.round(np.random.rand(1, sample_size, 1) * 256) - 128
-    x = np.clip(x, -128, 127)
-
-    for i in range(size):
-        preds = model.predict(x, verbose=0)[0]
-        y = choose(preds[-1])
-        if y > 127:
-            y = y - 256
-
-        x[0, 0:(sample_size-1), 0] = x[0, 1:, 0]
-        x[0, -1, 0] = y
-        ys[i] = y
-
-        print(y, flush=True)
-
-        if i % 100 == 0:
-            print(i, flush=True)
-            sf.write(f'out.wav', ulaw_reverse(ys), 16000)
-
-if sys.argv[1] == 'train':
-    train()
-elif sys.argv[1] == 'gen':
-    generate_audio()
-else:
-    print('Usage: ./train [ train | gen ]')
-
+model.fit(x=generator(),
+          steps_per_epoch=100,
+          initial_epoch=initial_epoch,
+          epochs=100000,
+          callbacks=[checkpoint])
