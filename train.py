@@ -8,7 +8,7 @@ import random
 import soundfile as sf
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.layers import Conv1D, Input, Add, Dropout, Dense, Activation, Flatten
+from tensorflow.keras.layers import Conv1D, Input, Add, Multiply, Dropout, Dense, Activation, Flatten
 from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import ModelCheckpoint
 
@@ -61,22 +61,22 @@ def get_model():
     channels = 256
     num_layers = 15
 
-    inputs = Input(shape=(None, 1))
+    inputs = Input(shape=(None, 1), name='input')
     x = inputs
     skip_connections = []
 
     for i in range(num_layers):
         residual = x
-        x1 = Conv1D(channels, 2, padding='causal', dilation_rate=2**i, activation='tanh')(x)
-        x2 = Conv1D(channels, 2, padding='causal', dilation_rate=2**i, activation='sigmoid')(x)
-        x = x1 * x2
-        skip_connections.append(Conv1D(channels, 1, activation='relu')(x))
-        x = x + residual
+        x1 = Conv1D(channels, 2, padding='causal', dilation_rate=2**i, activation='tanh', name='tanh_'+str(i))(x)
+        x2 = Conv1D(channels, 2, padding='causal', dilation_rate=2**i, activation='sigmoid', name='sigmoid_'+str(i))(x)
+        x = Multiply(name='layer_mul_'+str(i))([x1, x2])
+        skip_connections.append(Conv1D(channels, 1, activation='relu', name='skip_'+str(i))(x))
+        x = Add(name='layer_out_'+str(i))([x, residual])
 
-    x = Add()(skip_connections)
+    x = Add(name='add_skip_connections')(skip_connections)
     x = Activation('relu')(x)
-    x = Conv1D(channels, 1, activation='relu')(x)
-    x = Conv1D(num_classes, 1, activation='softmax')(x)
+    x = Conv1D(channels, 1, activation='relu', name='final_conv1d')(x)
+    x = Conv1D(num_classes, 1, activation='softmax', name='final_softmax')(x)
 
     model = Model(inputs=inputs, outputs=x)
     model.compile(optimizer='sgd',
@@ -95,7 +95,7 @@ if len(sys.argv) == 2:
     model.load_weights(path)
     initial_epoch = int(re.match('.*/weights-(\d+).hdf5', path).group(1))
 
-checkpoint = ModelCheckpoint(filepath='./model/weights-{epoch:03d}.hdf5',
+checkpoint = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.hdf5',
                              verbose=1,
                              save_best_only=False,
                              save_weights_only=True,
