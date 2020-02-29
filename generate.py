@@ -19,12 +19,6 @@ def ulaw_reverse(ys):
     ys = ys.astype(float) / 256
     return np.sign(ys) / u * ((1 + u) ** np.abs(ys) - 1)
 
-def choose(dist):
-    for i in range(len(dist)):
-        if random.uniform(0, 1) < dist[i]:
-            return i
-    return np.argmax(dist)
-
 model = keras.models.load_model('./saved_model/saved_model')
 model.load_weights(sys.argv[1])
 
@@ -36,7 +30,7 @@ x = np.clip(x, -128, 127)
 
 for i in range(size):
     preds = model.predict(x, verbose=0)[0]
-    y = choose(preds[-1])
+    y = np.random.choice(256, p=preds[-1])
     if y > 127:
         y = y - 256
 
