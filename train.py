@@ -19,32 +19,27 @@ initial_epoch = 0
 num_classes = 256
 
 # We assume clean samples are 1-channel 16kHz
-def sample_generator():
-    files = [str(path) for path in Path('LibriSpeech/train-other-500').glob('**/*.flac')]
-    random.shuffle(files)
-
+def sample_generator(initial_epoch):
+    data, samplerate = sf.read('train.wav')
+    assert samplerate == 16000
+    
     sample_size = 16000 * 2
     total = batch_size * sample_size
 
-    data = np.empty(0)
-    count = 0
+    data = data[total * initial_epoch:]
 
     while True:
-        file = files[count % len(files)]
-        x, samplerate = sf.read(file)
-        assert samplerate == 16000
-        data = np.append(data, np.trim_zeros(ulaw(x)))
+        x = data[:total]
+        data = data[total:]
 
-        if len(data) >= total:
-            x = data[:total]
-            data = data[total:]
+        x = ulaw(x)
 
-            y = np.concatenate([x[1:], [0]])
-            y = keras.utils.to_categorical(y=y, num_classes=num_classes)
+        y = np.concatenate([x[1:], [0]])
+        y = keras.utils.to_categorical(y=y, num_classes=num_classes)
 
-            x = np.reshape(x, (batch_size, sample_size, 1))
-            y = np.reshape(y, (batch_size, sample_size, num_classes))
-            yield x, y
+        x = np.reshape(x, (batch_size, sample_size, 1))
+        y = np.reshape(y, (batch_size, sample_size, num_classes))
+        yield x, y
 
 # https://en.wikipedia.org/wiki/%CE%9C-law_algorithm
 #
@@ -79,7 +74,7 @@ def get_model():
     x = Conv1D(num_classes, 1, activation='softmax', name='final_softmax')(x)
 
     model = Model(inputs=inputs, outputs=x)
-    model.compile(optimizer='sgd',
+    model.compile(optimizer='adam',
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
     model.summary()
@@ -103,7 +98,7 @@ checkpoint = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.hdf5',
 
 model.save('./model/saved_model', save_format='tf')
 
-model.fit(x=sample_generator(),
+model.fit(x=sample_generator(initial_epoch),
           steps_per_epoch=100,
           initial_epoch=initial_epoch,
           epochs=100000,
