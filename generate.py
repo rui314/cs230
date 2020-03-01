@@ -19,19 +19,15 @@ def ulaw_reverse(ys):
     ys = ys.astype(float) / 256
     return np.sign(ys) / u * ((1 + u) ** np.abs(ys) - 1)
 
-def print_bar(x):
-    if x >= 0:
-        print('%s%s' % (' ' * 128, '*' * x), flush=True)
-    else:
-        print('%s%s' % (' ' * (128 + x), '*' * abs(x)), flush=True)
-
 model = keras.models.load_model('./model/saved_model')
 model.load_weights(sys.argv[1])
 
 size = 16000 * 10
 ys = np.zeros(size)
 
-x = np.zeros((1, sample_size, 1))
+x = np.round(np.random.rand(1, sample_size, 1) * 256) - 128
+x = np.clip(x, -128, 127)
+# x = np.zeros((1, sample_size, 1))
 
 for i in range(size):
     preds = model.predict(x, verbose=0)[0]
@@ -43,7 +39,10 @@ for i in range(size):
     x[0, -1, 0] = y
     ys[i] = y
 
-    print_bar(y)
+    if y >= 0:
+        print('%s%s' % (' ' * 128, '*' * y), flush=True)
+    else:
+        print('%s%s' % (' ' * (128 + y), '*' * abs(y)), flush=True)
 
     if i % 100 == 0:
         print('*** ', i, flush=True)

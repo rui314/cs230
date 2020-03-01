@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 import re
+import os
 import sys
 import random
 import soundfile as sf
@@ -25,12 +26,16 @@ def sample_generator(initial_epoch):
     
     sample_size = 16000 * 2
     total = batch_size * sample_size
-
-    data = data[total * initial_epoch:]
+    start = total * initial_epoch
 
     while True:
-        x = data[:total]
-        data = data[total:]
+        end = start + total
+        if len(data) <= end:
+            start = 0
+            end = total
+            
+        x = data[start:end]
+        start += total
 
         x = ulaw(x)
 
@@ -65,8 +70,10 @@ def get_model():
         x1 = Conv1D(channels, 2, padding='causal', dilation_rate=2**i, activation='tanh', name='tanh_'+str(i))(x)
         x2 = Conv1D(channels, 2, padding='causal', dilation_rate=2**i, activation='sigmoid', name='sigmoid_'+str(i))(x)
         x = Multiply(name='layer_mul_'+str(i))([x1, x2])
-        skip_connections.append(Conv1D(channels, 1, activation='relu', name='skip_'+str(i))(x))
+        skip = Conv1D(channels, 1, activation='relu', name='skip_'+str(i))(x)
+        skip_connections.append(Dropout(0.05, name='drop_'+str(i))(skip))
         x = Add(name='layer_out_'+str(i))([x, residual])
+        x = Dropout(0.05, name='layer_out_drop_'+str(i))(x)
 
     x = Add(name='add_skip_connections')(skip_connections)
     x = Activation('relu')(x)
