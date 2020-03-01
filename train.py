@@ -77,7 +77,7 @@ def get_model():
     x = Conv1D(num_classes, 1, activation='softmax', name='final_softmax')(x)
 
     model = Model(inputs=inputs, outputs=x)
-    model.compile(optimizer='adam',
+    model.compile(optimizer=keras.optimizers.Adam(learning_rate=0.00005),
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
     model.summary()
@@ -104,5 +104,5 @@ model.save('./model/saved_model', save_format='tf')
 model.fit(x=sample_generator(initial_epoch),
           steps_per_epoch=100,
           initial_epoch=initial_epoch,
-          epochs=100000,
+          epochs=135000,
           callbacks=[checkpoint])
