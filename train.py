@@ -5,15 +5,12 @@ import numpy as np
 import re
 import os
 import sys
-import random
 import soundfile as sf
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.layers import Conv1D, Input, Add, Multiply, Dropout, Dense, Activation, Flatten
 from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import ModelCheckpoint
-
-random.seed()
 
 batch_size = 4
 initial_epoch = 0
@@ -98,7 +95,7 @@ if len(sys.argv) == 2:
     initial_epoch = int(re.match('.*/weights-(\d+).hdf5', path).group(1))
 
 checkpoint = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.hdf5',
-                             verbose=1,
+                             verbose=0,
                              save_best_only=False,
                              save_weights_only=True,
                              period=1)
