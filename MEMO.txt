@@ -28,12 +28,8 @@ $ sox -n -r 16000 -c 1 -b 16 silence.wav trim 0.0 0.4
 # Convert LibreSpeech samples from flac to wav format
 $ (cd LibriSpeech; parallel 'ffmpeg -i {} {/.}.wav' ::: $(find . -name \*.flac))
 
-$ for i in $(find LibriSpeech/dev-clean -name '*.flac'); do sox $i -t raw -r 8k -b 16 -e signed -c 1 -; done |
-    sox -t raw -r 8k -b 16 -e signed -c 1 - train.wav
-
-
-$ for i in $(find LibriSpeech/test-clean -name '*.flac'); do sox $i -t raw -r 8k -b 16 -e signed -c 1 -; done |
-    sox -t raw -r 8k -b 16 -e signed -c 1 - validate.wav
+$ find LibriSpeech/train-other-500 -name '*.flac' | parallel -j200 'sox {} -t raw -r 16k -b 16 -e signed -c 1 {.}.raw'
+$ find LibriSpeech/train-other-500 -name '*.raw' | shuf | xargs cat > train.raw
 
 Training
 --------

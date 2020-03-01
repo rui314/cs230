@@ -18,20 +18,19 @@ num_classes = 256
 
 # We assume clean samples are 1-channel 16kHz
 def sample_generator(initial_epoch):
-    data, samplerate = sf.read('train.wav')
-    assert samplerate == 16000
-    
+    filename = 'train.raw'
+    num_frames = os.path.getsize(filename) // 2
+
     sample_size = 16000 * 2
     total = batch_size * sample_size
     start = total * initial_epoch
 
     while True:
-        end = start + total
-        if len(data) <= end:
+        if num_frames <= start + total:
             start = 0
-            end = total
-            
-        x = data[start:end]
+
+        x, _ = sf.read(filename, format='RAW', subtype='PCM_16', samplerate=16000, channels=1,
+                       start=start, frames=total)
         start += total
 
         x = ulaw(x)
