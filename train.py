@@ -77,7 +77,7 @@ def get_model():
     x = Conv1D(num_classes, 1, activation='softmax', name='final_softmax')(x)
 
     model = Model(inputs=inputs, outputs=x)
-    model.compile(optimizer=keras.optimizers.Adam(learning_rate=0.00005),
+    model.compile(optimizer=keras.optimizers.Adam(learning_rate=0.00001),
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
     model.summary()
