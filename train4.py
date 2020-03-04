@@ -18,7 +18,7 @@ batch_size = 128
 initial_epoch = 0
 sample_rate = 8000
 num_classes = 256
-num_samples = 4096
+num_samples = 8192
 
 # https://en.wikipedia.org/wiki/%CE%9C-law_algorithm
 #
@@ -30,18 +30,29 @@ def ulaw(xs):
     xs = np.clip(xs, -128, 127)
     return np.rint(xs).astype(int)
 
+def permutation(num_frames):
+    skew = np.random.RandomState(0).permutation(num_samples)
+    perm = np.random.RandomState(1).permutation(num_frames // num_samples - 1)
+
+    for i in itertools.cycle(skew):
+        for j in itertools.cycle(perm):
+            yield i + j * num_samples
+
 def read_audio(initial_epoch):
     filename = 'train-8k.raw'
     num_frames = os.path.getsize(filename) // 2
-    perm = np.random.RandomState(0).permutation(num_frames // num_samples)
 
-    while True:
-        for i in perm:
-            x, _ = sf.read(filename, format='RAW', subtype='PCM_16', samplerate=sample_rate, channels=1,
-                           start=num_samples*i, frames=num_samples)
-            yield ulaw(x)
+    perm = permutation(num_frames)
 
-# We assume clean samples are 1-channel 16kHz
+    for _ in range(initial_epoch):
+        next(perm)
+
+    for i in perm:
+        x, _ = sf.read(filename, format='RAW', subtype='PCM_16', samplerate=sample_rate, channels=1,
+                       start=i, frames=num_samples)
+        yield ulaw(x)
+
+# We assume clean samples are 1-channel 8kHz
 def sample_generator(initial_epoch):
     filename = 'train-8k.raw'
     num_frames = os.path.getsize(filename) // 2
@@ -70,14 +81,12 @@ def get_model():
         y = Add()([Activation('tanh', name='tanh'+s)(y),
                    Activation('sigmoid', name='sigmoid'+s)(y)])
         y = BatchNormalization(name='norm'+s)(y)
-        y = Dropout(0.05)(y)
 
         s = '_enc2_' + str(i)
         y = Conv1D(2**(units+i), 15, padding='same', name='conv1d'+s)(y)
         y = Add()([Activation('tanh', name='tanh'+s)(y),
                    Activation('sigmoid', name='sigmoid'+s)(y)])
         y = BatchNormalization(name='norm'+s)(y)
-        y = Dropout(0.05)(y)
 
     # Decoder
     for i in reversed(range(layers)):
@@ -88,30 +97,34 @@ def get_model():
         y = Add()([Activation('tanh', name='tanh'+s)(y),
                    Activation('sigmoid', name='sigmoid'+s)(y)])
         y = BatchNormalization(name='norm'+s)(y)
-        y = Dropout(0.05)(y)
 
         s = '_dec2_' + str(i)
         y = Conv1D(2**(units+i-1), 15, padding='same', name='conv1d'+s)(y)
         y = Add()([Activation('tanh', name='tanh'+s)(y),
                    Activation('sigmoid', name='sigmoid'+s)(y)])
         y = BatchNormalization(name='norm'+s)(y)
-        y = Dropout(0.05)(y)
 
-    y = Dense(256, activation='softmax', name='final')(y)
+    y = Dense(256, activation='tanh', name='tanh_final1')(y)
+    y = BatchNormalization(name='norm_final1')(y)
+    y = Dense(256, activation='tanh', name='tanh_final2')(y)
+    y = BatchNormalization(name='norm_final2')(y)
+    y = Dense(256, activation='softmax', name='softmax_final')(y)
 
-    model = Model(inputs=x, outputs=y)
-    model.compile(keras.optimizers.Adam(), loss='categorical_crossentropy', metrics=['accuracy'])
-    model.summary()
-    return model
+    return Model(inputs=x, outputs=y)
 
 model = None
 mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
     model = get_model()
 
+model.compile(keras.optimizers.Adam(), loss='categorical_crossentropy', metrics=['accuracy'])
+model.summary()
+
+model.save('./model/saved_model')
+
 if len(sys.argv) == 2:
     path = sys.argv[1]
-    model.load_weights(path)
+    model.load_weights(path, by_name=True)
     initial_epoch = int(re.match('.*/weights-(\d+).hdf5', path).group(1))
 
 checkpoint = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.hdf5',
@@ -119,8 +132,6 @@ checkpoint = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.hdf5',
                              save_best_only=False,
                              save_weights_only=True,
                              period=1)
-
-model.save('./model/saved_model', save_format='tf')
 
 model.fit(x=sample_generator(initial_epoch),
           steps_per_epoch=100,
