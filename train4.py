@@ -13,12 +13,16 @@ from tensorflow import keras
 from tensorflow.keras.layers import Input, Dense, Conv2D, Conv2DTranspose, Conv1D, MaxPooling1D, MaxPooling2D, UpSampling1D, UpSampling2D, Concatenate, Reshape, Dropout, LSTM, Activation, BatchNormalization, Add, LeakyReLU
 from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, CSVLogger
+from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
 batch_size = 128
 initial_epoch = 0
 sample_rate = 8000
 num_classes = 256
 num_samples = 8192
+
+policy = mixed_precision.Policy('mixed_float16')
+mixed_precision.set_policy(policy)
 
 # https://en.wikipedia.org/wiki/%CE%9C-law_algorithm
 #
@@ -62,15 +66,17 @@ def sample_generator(initial_epoch):
 
 def get_validation_data():
     it = read_audio('validate-8k.raw', 0)
-    x = np.array(list(itertools.islice(it, batch_size)))
+    x = np.array(list(itertools.islice(it, batch_size*100)))
+    np.random.RandomState(0).shuffle(x)
+    x = x[:batch_size*25, :]
     x = x + 128
-    x = x.reshape((batch_size, num_samples, 1))
+    x = x.reshape((batch_size*25, num_samples, 1))
     return x, x
 
 # Create a keras model
 def get_model():
-    layers = 0
-    units = 4
+    layers = 1
+    units = 5
 
     x = Input(shape=(num_samples, 1))
     y = x
@@ -78,8 +84,10 @@ def get_model():
     def block(y, i, s):
         s += str(i)
         y = Conv1D(2**(units+i), 15, padding='same', activation='relu', name=s+'_conv1d_1')(y)
+        y = BatchNormalization(name=s+'_norm1')(y)
         y = Conv1D(2**(units+i), 15, padding='same', activation='relu', name=s+'_conv1d_2')(y)
-        return BatchNormalization(name=s+'_norm')(y)
+        y = BatchNormalization(name=s+'_norm2')(y)
+        return Dropout(0.1)(y)
 
     # Encoder
     for i in range(layers):
@@ -93,8 +101,8 @@ def get_model():
         y = UpSampling1D(4)(y)
         y = block(y, i, 'dec')
 
-    y = Dense(256, activation='relu', name='final_relu')(y)
-    y = Dense(256, activation='sigmoid', name='final_sigmoid')(y)
+    y = Dense(256, activation='relu', name='final_relu1')(y)
+    y = Dense(256, activation='relu', name='final_relu2')(y)
     y = Dense(256, activation='softmax', name='softmax_final')(y)
 
     return Model(inputs=x, outputs=y)
@@ -104,30 +112,29 @@ mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
     model = get_model()
 
-model.compile(keras.optimizers.Adam(0.01),
+model.compile(keras.optimizers.Adam(0.001),
               loss='sparse_categorical_crossentropy',
               metrics=['sparse_categorical_accuracy'])
 
 model.summary()
-model.save('./model/saved_model')
 
 if len(sys.argv) == 2:
     path = sys.argv[1]
     model.load_weights(path, by_name=True)
-    initial_epoch = int(re.match('.*/weights-(\d+).hdf5', path).group(1))
+    initial_epoch = int(re.match('.*/weights-(\d+).h5', path).group(1))
 
-cp1 = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.hdf5',
+cp1 = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.h5',
                       verbose=0,
-                      validation_data=get_validation_data(),
                       save_best_only=False,
-                      save_weights_only=True,
+                      save_weights_only=False,
                       period=1)
 
-cp2 = ReduceLROnPlateau('loss')
+cp2 = ReduceLROnPlateau(patience=7)
 cp3 = CSVLogger('training.log')
 
 model.fit(x=sample_generator(initial_epoch),
           steps_per_epoch=100,
           initial_epoch=initial_epoch,
+          validation_data=get_validation_data(),
           epochs=135000,
           callbacks=[cp1, cp2, cp3])
