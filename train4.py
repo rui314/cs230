@@ -15,14 +15,14 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, CSVLogger
 from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
-batch_size = 128
+batch_size = 256
 initial_epoch = 0
 sample_rate = 8000
 num_classes = 256
 num_samples = 8192
 
-policy = mixed_precision.Policy('mixed_float16')
-mixed_precision.set_policy(policy)
+#policy = mixed_precision.Policy('mixed_float16')
+#mixed_precision.set_policy(policy)
 
 # https://en.wikipedia.org/wiki/%CE%9C-law_algorithm
 #
@@ -39,7 +39,7 @@ def permutation(num_frames):
     perm = np.random.RandomState(1).permutation(num_frames // num_samples - 1)
 
     for i in itertools.cycle(skew):
-        for j in itertools.cycle(perm):
+        for j in perm:
             yield i + j * num_samples
 
 def read_audio(filename, initial_epoch):
@@ -103,7 +103,7 @@ def get_model():
 
     y = Dense(256, activation='relu', name='final_relu1')(y)
     y = Dense(256, activation='relu', name='final_relu2')(y)
-    y = Dense(256, activation='softmax', name='softmax_final')(y)
+    y = Dense(256, activation='softmax', dtype='float32', name='softmax_final')(y)
 
     return Model(inputs=x, outputs=y)
 
@@ -129,7 +129,7 @@ cp1 = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.h5',
                       save_weights_only=False,
                       period=1)
 
-cp2 = ReduceLROnPlateau(patience=7)
+cp2 = ReduceLROnPlateau(patience=10)
 cp3 = CSVLogger('training.log')
 
 model.fit(x=sample_generator(initial_epoch),
