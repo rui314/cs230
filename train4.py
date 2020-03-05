@@ -38,10 +38,8 @@ def permutation(num_frames):
         for j in itertools.cycle(perm):
             yield i + j * num_samples
 
-def read_audio(initial_epoch):
-    filename = 'train-8k.raw'
+def read_audio(filename, initial_epoch):
     num_frames = os.path.getsize(filename) // 2
-
     perm = permutation(num_frames)
 
     for _ in range(initial_epoch):
@@ -54,7 +52,7 @@ def read_audio(initial_epoch):
 
 # We assume clean samples are 1-channel 8kHz
 def sample_generator(initial_epoch):
-    it = read_audio('train-8k.raw' initial_epoch)
+    it = read_audio('train-8k.raw', initial_epoch)
     
     while True:
         x = np.array(list(itertools.islice(it, batch_size)))
@@ -63,7 +61,7 @@ def sample_generator(initial_epoch):
         yield x, x
 
 def get_validation_data():
-    it = read_audio('validate-8k.raw' initial_epoch)
+    it = read_audio('validate-8k.raw', 0)
     x = np.array(list(itertools.islice(it, batch_size)))
     x = x + 128
     x = x.reshape((batch_size, num_samples, 1))
