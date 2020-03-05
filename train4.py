@@ -21,8 +21,8 @@ sample_rate = 8000
 num_classes = 256
 num_samples = 8192
 
-#policy = mixed_precision.Policy('mixed_float16')
-#mixed_precision.set_policy(policy)
+policy = mixed_precision.Policy('mixed_float16')
+mixed_precision.set_policy(policy)
 
 # https://en.wikipedia.org/wiki/%CE%9C-law_algorithm
 #
