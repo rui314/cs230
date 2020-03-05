@@ -15,7 +15,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, CSVLogger
 from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
-batch_size = 256
+batch_size = 128
 initial_epoch = 0
 sample_rate = 8000
 num_classes = 256
@@ -75,17 +75,18 @@ def get_validation_data():
 
 # Create a keras model
 def get_model():
-    layers = 1
-    units = 5
+    layers = 5
+    units = 7
 
     x = Input(shape=(num_samples, 1))
     y = x
 
     def block(y, i, s):
         s += str(i)
-        y = Conv1D(2**(units+i), 15, padding='same', activation='relu', name=s+'_conv1d_1')(y)
+        u = min(1024, 2**(units+i))
+        y = Conv1D(u, 15, padding='same', activation='relu', name=s+'_conv1d_1')(y)
         y = BatchNormalization(name=s+'_norm1')(y)
-        y = Conv1D(2**(units+i), 15, padding='same', activation='relu', name=s+'_conv1d_2')(y)
+        y = Conv1D(u, 15, padding='same', activation='relu', name=s+'_conv1d_2')(y)
         y = BatchNormalization(name=s+'_norm2')(y)
         return Dropout(0.1)(y)
 
@@ -112,7 +113,7 @@ mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
     model = get_model()
 
-model.compile(keras.optimizers.Adam(0.001),
+model.compile(keras.optimizers.Adam(),
               loss='sparse_categorical_crossentropy',
               metrics=['sparse_categorical_accuracy'])
 
@@ -129,12 +130,12 @@ cp1 = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.h5',
                       save_weights_only=False,
                       period=1)
 
-cp2 = ReduceLROnPlateau(patience=10)
-cp3 = CSVLogger('training.log')
+cp2 = CSVLogger('training.log')
+#cp3 = ReduceLROnPlateau(patience=10)
 
 model.fit(x=sample_generator(initial_epoch),
           steps_per_epoch=100,
           initial_epoch=initial_epoch,
           validation_data=get_validation_data(),
           epochs=135000,
-          callbacks=[cp1, cp2, cp3])
+          callbacks=[cp1, cp2])
