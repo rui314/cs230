@@ -54,9 +54,7 @@ def read_audio(initial_epoch):
 
 # We assume clean samples are 1-channel 8kHz
 def sample_generator(initial_epoch):
-    filename = 'train-8k.raw'
-    num_frames = os.path.getsize(filename) // 2
-    it = read_audio(initial_epoch)
+    it = read_audio('train-8k.raw' initial_epoch)
     
     while True:
         x = np.array(list(itertools.islice(it, batch_size)))
@@ -64,9 +62,16 @@ def sample_generator(initial_epoch):
         x = x.reshape((batch_size, num_samples, 1))
         yield x, x
 
+def get_validation_data():
+    it = read_audio('validate-8k.raw' initial_epoch)
+    x = np.array(list(itertools.islice(it, batch_size)))
+    x = x + 128
+    x = x.reshape((batch_size, num_samples, 1))
+    return x, x
+
 # Create a keras model
 def get_model():
-    layers = 1
+    layers = 0
     units = 4
 
     x = Input(shape=(num_samples, 1))
@@ -115,6 +120,7 @@ if len(sys.argv) == 2:
 
 cp1 = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.hdf5',
                       verbose=0,
+                      validation_data=get_validation_data(),
                       save_best_only=False,
                       save_weights_only=True,
                       period=1)
