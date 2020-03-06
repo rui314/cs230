@@ -12,7 +12,7 @@ import itertools
 from tensorflow import keras
 from tensorflow.keras.layers import Input, Dense, Conv2D, Conv2DTranspose, Conv1D, MaxPooling1D, MaxPooling2D, UpSampling1D, UpSampling2D, Concatenate, Reshape, Dropout, LSTM, Activation, BatchNormalization, Add, LeakyReLU
 from tensorflow.keras.models import Model
-from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, CSVLogger
+from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, CSVLogger, LambdaCallback
 from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
 batch_size = 128
@@ -20,6 +20,8 @@ initial_epoch = 0
 sample_rate = 8000
 num_classes = 256
 num_samples = 8192
+
+model = None
 
 policy = mixed_precision.Policy('mixed_float16')
 mixed_precision.set_policy(policy)
@@ -34,6 +36,11 @@ def ulaw(xs):
     xs = np.clip(xs, -128, 127)
     return np.rint(xs).astype(int)
 
+def ulaw_reverse(ys):
+    u = 255
+    ys = ys.astype(float) / 256
+    return np.sign(ys) / u * ((1 + u) ** np.abs(ys) - 1)
+
 def permutation(num_frames):
     skew = np.random.RandomState(0).permutation(num_samples)
     perm = np.random.RandomState(1).permutation(num_frames // num_samples - 1)
@@ -44,22 +51,22 @@ def permutation(num_frames):
 
 def read_audio(filename, initial_epoch):
     num_frames = os.path.getsize(filename) // 2
-    perm = permutation(num_frames)
+
+    skew = np.random.RandomState(0).permutation(num_samples // 100) * 100
+    start = np.random.RandomState(1).permutation(num_frames // num_samples - 1) * num_samples
     rand = itertools.cycle(0.6 + np.random.RandomState(10).rand(10001) * 0.4) # for data augmentation
 
-    for _ in range(initial_epoch):
-        next(perm)
-        next(rand)
-
-    for i in perm:
-        x, _ = sf.read(filename, format='RAW', subtype='PCM_16', samplerate=sample_rate, channels=1,
-                       start=i, frames=num_samples)
-        yield ulaw(x * next(rand))
+    for sk in itertools.cycle(skew):
+        for neg in [1, -1]: # for data augmentation
+            for st in start:
+                x, _ = sf.read(filename, format='RAW', subtype='PCM_16', samplerate=sample_rate, channels=1,
+                               start=st, frames=num_samples)
+                yield ulaw(x * next(rand) * neg)
 
 # We assume clean samples are 1-channel 8kHz
 def sample_generator(initial_epoch):
     it = read_audio('train-8k.raw', initial_epoch)
-    
+
     while True:
         x = np.array(list(itertools.islice(it, batch_size)))
         x = x + 128
@@ -77,7 +84,7 @@ def get_validation_data():
 
 # Create a keras model
 def get_model():
-    layers = 5
+    layers = 2
     units = 6
 
     x = Input(shape=(num_samples, 1))
@@ -110,7 +117,6 @@ def get_model():
 
     return Model(inputs=x, outputs=y)
 
-model = None
 mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
     model = get_model()
@@ -131,7 +137,7 @@ cp1 = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.h5',
                       verbose=0,
                       save_best_only=False,
                       save_weights_only=True,
-                      period=3)
+                      save_freq=3)
 
 cp2 = CSVLogger('training.log', append=True)
 cp3 = ReduceLROnPlateau(patience=100)

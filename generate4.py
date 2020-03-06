@@ -31,14 +31,16 @@ def ulaw_reverse(ys):
 model = keras.models.load_model('./model/saved_model')
 model.load_weights(sys.argv[1])
 
+xs = []
 ys = []
 
-for i in range(10):
+for i in range(30):
     x, _ = sf.read('train-8k.raw', format='RAW', subtype='PCM_16', samplerate=8000, channels=1,
                    start=8000*500+num_samples*i, frames=num_samples)
-    sf.write(b'out2.wav', ulaw_reverse(ulaw(x)), 8000)
 
-    x = ulaw(x) + 128
+    x = ulaw(x)
+    xs.append(ulaw_reverse(x))
+    x = x + 128
     print('x', x[:50].tolist())
     x = x.reshape(1, num_samples)
 
@@ -49,4 +51,4 @@ for i in range(10):
     ys.append(y)
 
 sf.write(b'out.wav', np.concatenate(ys), 8000)
-sf.write(b'out2.wav', np.concatenate(ys), 8000)
+sf.write(b'out2.wav', np.concatenate(xs), 8000)
