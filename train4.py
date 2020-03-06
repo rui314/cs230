@@ -45,14 +45,16 @@ def permutation(num_frames):
 def read_audio(filename, initial_epoch):
     num_frames = os.path.getsize(filename) // 2
     perm = permutation(num_frames)
+    rand = itertools.cycle(0.6 + np.random.RandomState(10).rand(10001) * 0.4) # for data augmentation
 
     for _ in range(initial_epoch):
         next(perm)
+        next(rand)
 
     for i in perm:
         x, _ = sf.read(filename, format='RAW', subtype='PCM_16', samplerate=sample_rate, channels=1,
                        start=i, frames=num_samples)
-        yield ulaw(x)
+        yield ulaw(x * next(rand))
 
 # We assume clean samples are 1-channel 8kHz
 def sample_generator(initial_epoch):
@@ -129,7 +131,7 @@ cp1 = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.h5',
                       verbose=0,
                       save_best_only=False,
                       save_weights_only=True,
-                      period=1)
+                      period=3)
 
 cp2 = CSVLogger('training.log', append=True)
 cp3 = ReduceLROnPlateau(patience=100)
