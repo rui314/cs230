@@ -76,14 +76,14 @@ def get_validation_data():
 # Create a keras model
 def get_model():
     layers = 5
-    units = 7
+    units = 6
 
     x = Input(shape=(num_samples, 1))
     y = x
 
     def block(y, i, s):
         s += str(i)
-        u = min(1024, 2**(units+i))
+        u = 2**(units+i)
         y = Conv1D(u, 15, padding='same', activation='relu', name=s+'_conv1d_1')(y)
         y = BatchNormalization(name=s+'_norm1')(y)
         y = Conv1D(u, 15, padding='same', activation='relu', name=s+'_conv1d_2')(y)
@@ -117,6 +117,7 @@ model.compile(keras.optimizers.Adam(),
               loss='sparse_categorical_crossentropy',
               metrics=['sparse_categorical_accuracy'])
 
+model.save('./model/saved_model')
 model.summary()
 
 if len(sys.argv) == 2:
@@ -127,15 +128,15 @@ if len(sys.argv) == 2:
 cp1 = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.h5',
                       verbose=0,
                       save_best_only=False,
-                      save_weights_only=False,
+                      save_weights_only=True,
                       period=1)
 
-cp2 = CSVLogger('training.log')
-#cp3 = ReduceLROnPlateau(patience=10)
+cp2 = CSVLogger('training.log', append=True)
+cp3 = ReduceLROnPlateau(patience=100)
 
 model.fit(x=sample_generator(initial_epoch),
           steps_per_epoch=100,
           initial_epoch=initial_epoch,
           validation_data=get_validation_data(),
           epochs=135000,
-          callbacks=[cp1, cp2])
+          callbacks=[cp1, cp2, cp3])

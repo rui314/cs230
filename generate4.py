@@ -28,7 +28,8 @@ def ulaw_reverse(ys):
     ys = ys.astype(float) / 256
     return np.sign(ys) / u * ((1 + u) ** np.abs(ys) - 1)
 
-model = keras.models.load_model(sys.argv[1])
+model = keras.models.load_model('./model/saved_model')
+model.load_weights(sys.argv[1])
 
 ys = []
 
