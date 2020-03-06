@@ -86,6 +86,7 @@ def get_validation_data():
 def get_model():
     layers = 2
     units = 6
+    force_trainable = True
 
     x = Input(shape=(num_samples, 1))
     y = x
@@ -93,6 +94,8 @@ def get_model():
     def block(y, i, s, trainable):
         s += str(i)
         u = 2**(units+i)
+        trainable = (trainable or force_trainable)
+
         y = Conv1D(u, 15, padding='same', activation='relu', name=s+'_conv1d_1', trainable=trainable)(y)
         y = BatchNormalization(name=s+'_norm1', trainable=trainable)(y)
         y = Conv1D(u, 15, padding='same', activation='relu', name=s+'_conv1d_2', trainable=trainable)(y)
@@ -111,7 +114,7 @@ def get_model():
         y = UpSampling1D(4)(y)
         y = block(y, i, 'dec', i == layers - 1)
 
-    trainable = (layers == 1)
+    trainable = (layers == 1 or force_trainable)
     y = Dense(256, activation='relu', name='final_relu1', trainable=trainable)(y)
     y = Dense(256, activation='relu', name='final_relu2', trainable=trainable)(y)
     y = Dense(256, activation='softmax', dtype='float32', name='softmax_final', trainable=trainable)(y)
@@ -122,7 +125,7 @@ mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
     model = get_model()
 
-model.compile(keras.optimizers.Adam(),
+model.compile(keras.optimizers.Adam(0.0001),
               loss='sparse_categorical_crossentropy',
               metrics=['sparse_categorical_accuracy'])
 
@@ -141,7 +144,7 @@ cp1 = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.h5',
                       save_freq=3)
 
 cp2 = CSVLogger('training.log', append=True)
-cp3 = ReduceLROnPlateau(patience=100)
+cp3 = ReduceLROnPlateau(patience=50)
 
 model.fit(x=sample_generator(initial_epoch),
           steps_per_epoch=100,

@@ -40,15 +40,15 @@ for i in range(30):
 
     x = ulaw(x)
     xs.append(ulaw_reverse(x))
-    x = x + 128
     print('x', x[1000:1050].tolist())
+    x = x + 128
     x = x.reshape(1, num_samples)
 
     y = model.predict(x)[0]
-    y = np.argmax(y, axis=-1)
+    y = np.argmax(y, axis=-1) - 128
     print('y', y[1000:1050].tolist())
     print()
-    y = ulaw_reverse(y - 128)
+    y = ulaw_reverse(y)
     ys.append(y)
 
 sf.write(b'out.wav', np.concatenate(ys), 8000)
