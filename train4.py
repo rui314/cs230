@@ -90,30 +90,31 @@ def get_model():
     x = Input(shape=(num_samples, 1))
     y = x
 
-    def block(y, i, s):
+    def block(y, i, s, trainable):
         s += str(i)
         u = 2**(units+i)
-        y = Conv1D(u, 15, padding='same', activation='relu', name=s+'_conv1d_1')(y)
-        y = BatchNormalization(name=s+'_norm1')(y)
-        y = Conv1D(u, 15, padding='same', activation='relu', name=s+'_conv1d_2')(y)
-        y = BatchNormalization(name=s+'_norm2')(y)
+        y = Conv1D(u, 15, padding='same', activation='relu', name=s+'_conv1d_1', trainable=trainable)(y)
+        y = BatchNormalization(name=s+'_norm1', trainable=trainable)(y)
+        y = Conv1D(u, 15, padding='same', activation='relu', name=s+'_conv1d_2', trainable=trainable)(y)
+        y = BatchNormalization(name=s+'_norm2', trainable=trainable)(y)
         return Dropout(0.1)(y)
 
     # Encoder
     for i in range(layers):
-        y = block(y, i, 'enc')
+        y = block(y, i, 'enc', i == layers - 1)
         y = MaxPooling1D(4)(y)
 
-    y = block(y, layers, 'enc')
+    y = block(y, layers, 'enc'+str(layers+100)+'_', True)
 
     # Decoder
     for i in reversed(range(layers)):
         y = UpSampling1D(4)(y)
-        y = block(y, i, 'dec')
+        y = block(y, i, 'dec', i == layers - 1)
 
-    y = Dense(256, activation='relu', name='final_relu1')(y)
-    y = Dense(256, activation='relu', name='final_relu2')(y)
-    y = Dense(256, activation='softmax', dtype='float32', name='softmax_final')(y)
+    trainable = (layers == 1)
+    y = Dense(256, activation='relu', name='final_relu1', trainable=trainable)(y)
+    y = Dense(256, activation='relu', name='final_relu2', trainable=trainable)(y)
+    y = Dense(256, activation='softmax', dtype='float32', name='softmax_final', trainable=trainable)(y)
 
     return Model(inputs=x, outputs=y)
 

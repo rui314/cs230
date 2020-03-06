@@ -14,7 +14,7 @@ from tensorflow.keras.callbacks import ModelCheckpoint
 from datetime import datetime
 from pathlib import Path
 
-num_samples = 4096
+num_samples = 8192
 
 def ulaw(xs):
     u = 255
@@ -35,18 +35,19 @@ xs = []
 ys = []
 
 for i in range(30):
-    x, _ = sf.read('train-8k.raw', format='RAW', subtype='PCM_16', samplerate=8000, channels=1,
+    x, _ = sf.read('validate-8k.raw', format='RAW', subtype='PCM_16', samplerate=8000, channels=1,
                    start=8000*500+num_samples*i, frames=num_samples)
 
     x = ulaw(x)
     xs.append(ulaw_reverse(x))
     x = x + 128
-    print('x', x[:50].tolist())
+    print('x', x[1000:1050].tolist())
     x = x.reshape(1, num_samples)
 
     y = model.predict(x)[0]
     y = np.argmax(y, axis=-1)
-    print('y', y[:50].tolist())
+    print('y', y[1000:1050].tolist())
+    print()
     y = ulaw_reverse(y - 128)
     ys.append(y)
 
