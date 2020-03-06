@@ -40,13 +40,13 @@ for i in range(30):
 
     x = ulaw(x)
     xs.append(ulaw_reverse(x))
-    print('x', x[1000:1050].tolist())
+    print('x', x[4000:4050].tolist())
     x = x + 128
     x = x.reshape(1, num_samples)
 
     y = model.predict(x)[0]
     y = np.argmax(y, axis=-1) - 128
-    print('y', y[1000:1050].tolist())
+    print('y', y[4000:4050].tolist())
     print()
     y = ulaw_reverse(y)
     ys.append(y)

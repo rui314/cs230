@@ -84,9 +84,9 @@ def get_validation_data():
 
 # Create a keras model
 def get_model():
-    layers = 2
+    layers = 3
     units = 6
-    force_trainable = True
+    force_trainable = False
 
     x = Input(shape=(num_samples, 1))
     y = x
@@ -125,7 +125,7 @@ mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
     model = get_model()
 
-model.compile(keras.optimizers.Adam(0.0001),
+model.compile(keras.optimizers.Adam(),
               loss='sparse_categorical_crossentropy',
               metrics=['sparse_categorical_accuracy'])
 
