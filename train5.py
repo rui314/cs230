@@ -15,7 +15,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, CSVLogger, LambdaCallback
 from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
-batch_size = 16
+batch_size = 8
 initial_epoch = 0
 sample_rate = 16000
 num_classes = 256
@@ -81,13 +81,13 @@ def get_model():
     y = x
 
     def layer(y, dilation):
-        y = Conv1D(64, 3, dilation_rate=2**dilation, padding='same')(y)
+        y = Conv1D(128, 3, dilation_rate=2**dilation, padding='same')(y)
         y = LeakyReLU()(y)
-        y = Conv1D(64, 3, dilation_rate=2**dilation, padding='same')(y)
+        y = Conv1D(128, 3, dilation_rate=2**dilation, padding='same')(y)
         y = LeakyReLU()(y)
         return BatchNormalization()(y)
 
-    for i in range(13):
+    for i in range(14):
         y = layer(y, i)
     y = layer(y, 0)
     y = Conv1D(256, 1, activation='softmax')(y)
