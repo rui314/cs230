@@ -64,17 +64,15 @@ def read_audio(filename, initial_epoch):
 # We assume clean samples are 1-channel 8kHz
 def sample_generator(initial_epoch):
     speech = read_audio('train-16k.raw', initial_epoch)
-    noise = read_audio('noise-16k.raw', initial_epoch)
+    noise = read_audio('noise-normalized-16k.raw', initial_epoch)
 
     while True:
         sound = np.array(list(itertools.islice(speech, batch_size)))
         noise = np.array(list(itertools.islice(noise, batch_size)))
         mixed = sound * 0.8 + noise * 0.2
 
-        y = keras.utils.to_categorical(y=(ulaw(mixed)+128), num_classes=num_classes)
-
         x = ulaw(sound).reshape((batch_size, num_samples, 1))
-        y = y.reshape((batch_size, num_samples, num_classes))
+        y = (ulaw(mixed)+128).reshape((batch_size, num_samples, 1))
         yield x, y
 
 # Create a keras model
@@ -100,7 +98,7 @@ mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
     model = get_model()
 
-model.compile(keras.optimizers.Adam(0.00001), loss='mse', metrics=['accuracy'])
+model.compile(keras.optimizers.Adam(), loss='sparse_categorical_crossentropy', metrics=['sparse_categorical_accuracy'])
 model.summary()
 
 if len(sys.argv) == 2:
@@ -117,7 +115,7 @@ cp1 = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.h5',
 cp2 = CSVLogger('training.log', append=True)
 
 model.fit(x=sample_generator(initial_epoch),
-          steps_per_epoch=200,
+          steps_per_epoch=100,
           initial_epoch=initial_epoch,
           epochs=135000,
           callbacks=[cp1, cp2])
