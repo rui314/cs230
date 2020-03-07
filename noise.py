@@ -10,8 +10,8 @@ xs = []
 for file in glob.glob('rnnoise_contributions/**/*.wav', recursive=True):
     x, rate = sf.read(file)
     assert rate == 16000
-    x = x / np.max(x) * 0.3
+    x = x / np.max(x)
     print(file, np.max(x))
     xs.append(x)
 
-sf.write(b'out.wav', np.concatenate(xs), samplerate)
+sf.write(b'out.raw', np.concatenate(xs), samplerate, subtype='PCM_16')

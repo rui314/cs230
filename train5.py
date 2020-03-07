@@ -15,16 +15,16 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, CSVLogger, LambdaCallback
 from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
-batch_size = 64
+batch_size = 16
 initial_epoch = 0
 sample_rate = 16000
 num_classes = 256
-num_samples = 16384
+num_samples = 16000 * 5
 
 model = None
 
-# policy = mixed_precision.Policy('mixed_float16')
-# mixed_precision.set_policy(policy)
+policy = mixed_precision.Policy('mixed_float16')
+mixed_precision.set_policy(policy)
 
 def permutation(num_frames):
     skew = np.random.RandomState(0).permutation(num_samples)
@@ -50,18 +50,18 @@ def read_audio(filename, initial_epoch):
 
 # We assume clean samples are 1-channel 8kHz
 def sample_generator(initial_epoch):
-    it = read_audio('train-16k.raw', initial_epoch)
+    speech = read_audio('train-16k.raw', initial_epoch)
+    noise = read_audio('noise-16k.raw', initial_epoch)
 
     while True:
-        x = np.array(list(itertools.islice(it, batch_size)))
-        x = x.reshape((batch_size, num_samples, 1))
-        yield x, x
+        x = np.array(list(itertools.islice(speech, batch_size)))
+        noise = np.array(list(itertools.islice(noise, batch_size)))
 
-def get_validation_data():
-    it = read_audio('validate-16k.raw', 0)
-    x = np.array(list(itertools.islice(it, batch_size*10)))
-    x = x.reshape((-1, num_samples, 1))
-    return x, x
+        y = x * 0.8 + noise * 0.2
+
+        x = x.reshape((batch_size, num_samples, 1))
+        y = y.reshape((batch_size, num_samples, 1))
+        yield x, y
 
 # Create a keras model
 def get_model():
@@ -105,6 +105,5 @@ cp2 = CSVLogger('training.log', append=True)
 model.fit(x=sample_generator(initial_epoch),
           steps_per_epoch=200,
           initial_epoch=initial_epoch,
-          validation_data=get_validation_data(),
           epochs=135000,
           callbacks=[cp1, cp2])

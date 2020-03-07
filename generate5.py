@@ -17,21 +17,18 @@ from pathlib import Path
 np.set_printoptions(precision=4, suppress=True, edgeitems=10, linewidth=300)
 
 num_samples = 16384
-samplerate = 16000
+rate = 16000
 
 model = keras.models.load_model(sys.argv[1])
 
 xs = []
 ys = []
 
-for i in range(30):
-    x, _ = sf.read('validate-16k.raw', format='RAW', subtype='PCM_16', samplerate=samplerate, channels=1,
-                   start=samplerate*250+num_samples*i, frames=num_samples)
-    xs.append(x)
+x, _ = sf.read('train-16k.raw', format='RAW', subtype='PCM_16', samplerate=rate, channels=1,
+               start=rate*250, frames=rate*10)
 
-    y = model.predict(x.reshape(1, num_samples))[0].flatten()
-    print(np.abs(x - y))
-    ys.append(y)
+y = model.predict(x.reshape(1, -1, 1))[0].flatten().astype('float32')
+print(np.abs(x - y))
 
-sf.write(b'out.wav', np.concatenate(ys), samplerate)
-sf.write(b'out2.wav', np.concatenate(xs), samplerate)
+sf.write(b'out.wav', y, rate)
+sf.write(b'out2.wav', x, rate)
