@@ -28,15 +28,14 @@ def ulaw_reverse(ys):
     ys = ys.astype(float) / 256
     return np.sign(ys) / u * ((1 + u) ** np.abs(ys) - 1)
 
-model = keras.models.load_model('./model/saved_model')
-model.load_weights(sys.argv[1])
+model = keras.models.load_model(sys.argv[1])
 
 xs = []
 ys = []
 
 for i in range(30):
     x, _ = sf.read('validate-8k.raw', format='RAW', subtype='PCM_16', samplerate=8000, channels=1,
-                   start=8000*500+num_samples*i, frames=num_samples)
+                   start=8000*250+num_samples*i, frames=num_samples)
 
     x = ulaw(x)
     xs.append(ulaw_reverse(x))

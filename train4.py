@@ -75,16 +75,14 @@ def sample_generator(initial_epoch):
 
 def get_validation_data():
     it = read_audio('validate-8k.raw', 0)
-    x = np.array(list(itertools.islice(it, batch_size*100)))
-    np.random.RandomState(0).shuffle(x)
-    x = x[:batch_size*25, :]
+    x = np.array(list(itertools.islice(it, batch_size*10)))
     x = x + 128
-    x = x.reshape((batch_size*25, num_samples, 1))
+    x = x.reshape((-1, num_samples, 1))
     return x, x
 
 # Create a keras model
 def get_model():
-    layers = 3
+    layers = 4
     units = 6
     force_trainable = False
 
@@ -128,8 +126,6 @@ with mirrored_strategy.scope():
 model.compile(keras.optimizers.Adam(),
               loss='sparse_categorical_crossentropy',
               metrics=['sparse_categorical_accuracy'])
-
-model.save('./model/saved_model')
 model.summary()
 
 if len(sys.argv) == 2:
@@ -140,15 +136,15 @@ if len(sys.argv) == 2:
 cp1 = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.h5',
                       verbose=0,
                       save_best_only=False,
-                      save_weights_only=True,
-                      save_freq=3)
+                      save_weights_only=False,
+                      save_freq=1)
 
 cp2 = CSVLogger('training.log', append=True)
-cp3 = ReduceLROnPlateau(patience=50)
+# cp3 = ReduceLROnPlateau(patience=50)
 
 model.fit(x=sample_generator(initial_epoch),
-          steps_per_epoch=100,
+          steps_per_epoch=200,
           initial_epoch=initial_epoch,
-          validation_data=get_validation_data(),
+          # validation_data=get_validation_data(),
           epochs=135000,
-          callbacks=[cp1, cp2, cp3])
+          callbacks=[cp1, cp2])
