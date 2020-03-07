@@ -80,16 +80,17 @@ def get_model():
     x = Input(shape=(None, 1))
     y = x
 
-    def layer(y, dilation):
-        y = Conv1D(128, 3, dilation_rate=2**dilation, padding='same')(y)
+    def layer(y, kernel, dilation):
+        y = Conv1D(256, kernel, dilation_rate=3**dilation, padding='same')(y)
         y = LeakyReLU()(y)
-        y = Conv1D(128, 3, dilation_rate=2**dilation, padding='same')(y)
+        y = Conv1D(256, kernel, dilation_rate=3**dilation, padding='same')(y)
         y = LeakyReLU()(y)
         return BatchNormalization()(y)
 
-    for i in range(14):
-        y = layer(y, i)
-    y = layer(y, 0)
+    y = layer(y, 80, 0)
+    for i in range(9):
+        y = layer(y, 3, i)
+    y = layer(y, 3, 0)
     y = Conv1D(256, 1, activation='softmax')(y)
 
     return Model(inputs=x, outputs=y)
