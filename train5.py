@@ -23,8 +23,8 @@ num_samples = 16384
 
 model = None
 
-policy = mixed_precision.Policy('mixed_float16')
-mixed_precision.set_policy(policy)
+# policy = mixed_precision.Policy('mixed_float16')
+# mixed_precision.set_policy(policy)
 
 def permutation(num_frames):
     skew = np.random.RandomState(0).permutation(num_samples)
@@ -71,6 +71,8 @@ def get_model():
     def layer(y, dilation):
         y = Conv1D(64, 3, dilation_rate=2**dilation, padding='same')(y)
         y = LeakyReLU()(y)
+        y = Conv1D(64, 3, dilation_rate=2**dilation, padding='same')(y)
+        y = LeakyReLU()(y)
         return BatchNormalization()(y)
 
     for i in range(13):
@@ -84,7 +86,7 @@ mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
     model = get_model()
 
-model.compile(keras.optimizers.Adam(), loss='mse', metrics=['accuracy'])
+model.compile(keras.optimizers.Adam(0.00001), loss='mse', metrics=['accuracy'])
 model.summary()
 
 if len(sys.argv) == 2:

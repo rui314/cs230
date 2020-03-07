@@ -14,6 +14,8 @@ from tensorflow.keras.callbacks import ModelCheckpoint
 from datetime import datetime
 from pathlib import Path
 
+np.set_printoptions(precision=4, suppress=True, edgeitems=10, linewidth=300)
+
 num_samples = 16384
 samplerate = 16000
 
@@ -25,12 +27,10 @@ ys = []
 for i in range(30):
     x, _ = sf.read('validate-16k.raw', format='RAW', subtype='PCM_16', samplerate=samplerate, channels=1,
                    start=samplerate*250+num_samples*i, frames=num_samples)
+    xs.append(x)
 
-    print('x', x[4000:4010].tolist())
-    x = x.reshape(1, num_samples)
-
-    y = model.predict(x)[0].flatten()
-    print('y', y[4000:4010].tolist())
+    y = model.predict(x.reshape(1, num_samples))[0].flatten()
+    print(np.abs(x - y))
     ys.append(y)
 
 sf.write(b'out.wav', np.concatenate(ys), samplerate)
