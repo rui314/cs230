@@ -19,12 +19,25 @@ batch_size = 16
 initial_epoch = 0
 sample_rate = 16000
 num_classes = 256
-num_samples = 16000 * 5
+num_samples = 16000 * 3
 
-model = None
+# policy = mixed_precision.Policy('mixed_float16')
+# mixed_precision.set_policy(policy)
 
-policy = mixed_precision.Policy('mixed_float16')
-mixed_precision.set_policy(policy)
+# https://en.wikipedia.org/wiki/%CE%9C-law_algorithm
+#
+# f(x) = sgn(x) * ln(u * |x| + 1) / ln(u + 1) where u = 255
+def ulaw(xs):
+    u = 255
+    xs = np.sign(xs) * np.log(u * np.abs(xs) + 1) / np.log(u + 1)
+    xs = np.rint(xs * 256)
+    xs = np.clip(xs, -128, 127)
+    return np.rint(xs).astype(int)
+
+def ulaw_reverse(ys):
+    u = 255
+    ys = ys.astype(float) / 256
+    return np.sign(ys) / u * ((1 + u) ** np.abs(ys) - 1)
 
 def permutation(num_frames):
     skew = np.random.RandomState(0).permutation(num_samples)
@@ -54,13 +67,14 @@ def sample_generator(initial_epoch):
     noise = read_audio('noise-16k.raw', initial_epoch)
 
     while True:
-        x = np.array(list(itertools.islice(speech, batch_size)))
+        sound = np.array(list(itertools.islice(speech, batch_size)))
         noise = np.array(list(itertools.islice(noise, batch_size)))
+        mixed = sound * 0.8 + noise * 0.2
 
-        y = x * 0.8 + noise * 0.2
+        y = keras.utils.to_categorical(y=(ulaw(mixed)+128), num_classes=num_classes)
 
-        x = x.reshape((batch_size, num_samples, 1))
-        y = y.reshape((batch_size, num_samples, 1))
+        x = ulaw(sound).reshape((batch_size, num_samples, 1))
+        y = y.reshape((batch_size, num_samples, num_classes))
         yield x, y
 
 # Create a keras model
@@ -78,7 +92,7 @@ def get_model():
     for i in range(13):
         y = layer(y, i)
     y = layer(y, 0)
-    y = Conv1D(1, 1)(y)
+    y = Conv1D(256, 1, activation='softmax')(y)
 
     return Model(inputs=x, outputs=y)
 
