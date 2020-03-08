@@ -15,7 +15,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, CSVLogger, LambdaCallback
 from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
-batch_size = 8
+batch_size = 4
 initial_epoch = 0
 sample_rate = 16000
 num_classes = 256
@@ -81,14 +81,14 @@ def get_model():
     y = x
 
     def layer(y, kernel, dilation):
-        y = Conv1D(256, kernel, dilation_rate=3**dilation, padding='same')(y)
+        y = Conv1D(256, kernel, dilation_rate=2**dilation, padding='same')(y)
         y = LeakyReLU()(y)
-        y = Conv1D(256, kernel, dilation_rate=3**dilation, padding='same')(y)
+        y = Conv1D(256, kernel, dilation_rate=2**dilation, padding='same')(y)
         y = LeakyReLU()(y)
         return BatchNormalization()(y)
 
     y = layer(y, 80, 0)
-    for i in range(9):
+    for i in range(14):
         y = layer(y, 3, i)
     y = layer(y, 3, 0)
     y = Conv1D(256, 1, activation='softmax')(y)
@@ -99,7 +99,7 @@ mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
     model = get_model()
 
-model.compile(keras.optimizers.Adam(), loss='sparse_categorical_crossentropy', metrics=['sparse_categorical_accuracy'])
+model.compile(keras.optimizers.Adam(0.000001), loss='sparse_categorical_crossentropy', metrics=['sparse_categorical_accuracy'])
 model.summary()
 
 if len(sys.argv) == 2:
@@ -114,9 +114,10 @@ cp1 = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.h5',
                       save_freq=1)
 
 cp2 = CSVLogger('training.log', append=True)
+cp3 = ReduceLROnPlateau('loss', patience=30)
 
 model.fit(x=sample_generator(initial_epoch),
           steps_per_epoch=100,
           initial_epoch=initial_epoch,
           epochs=135000,
-          callbacks=[cp1, cp2])
+          callbacks=[cp1, cp2, cp3])
