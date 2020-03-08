@@ -81,7 +81,7 @@ def get_model():
     y = x
 
     kernel_size = 3
-    residue_channel = 32
+    residual_channel = 32
     skip_channel = 512
     dilation_depth = 9
     repeat = 5
@@ -89,11 +89,11 @@ def get_model():
 
     for dilation_rate in [3**i for i in range(dilation_depth)] * repeat:
         res = y
-        y1 = Conv1D(residue_channel, kernel_size, padding='same', dilation_rate=dilation_rate, activation='tanh')(y)
-        y2 = Conv1D(residue_channel, kernel_size, padding='same', dilation_rate=dilation_rate, activation='sigmoid')(y)
-        y = Multiply()([y1, y2])
+        y1 = Conv1D(residual_channel, kernel_size, padding='same', dilation_rate=dilation_rate, activation='tanh')(y)
+        y2 = Conv1D(residual_channel, kernel_size, padding='same', dilation_rate=dilation_rate, activation='sigmoid')(y)
+        y = y1 * y2
         skip_connections.append(Conv1D(skip_channel, 1)(y))
-        y = Add()([y, res])
+        y = y + res
 
     y = Add()(skip_connections)
     y = Activation('relu')(y)
