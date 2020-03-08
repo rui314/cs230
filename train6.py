@@ -97,8 +97,8 @@ def get_model():
 
     y = Add()(skip_connections)
     y = Activation('relu')(y)
-    y = Conv1D(skip_channel, 1, padding='same', activation='relu')(y)
-    y = Conv1D(num_classes, 1, padding='same', activation='softmax')(y)
+    y = Conv1D(skip_channel, 1, activation='relu')(y)
+    y = Conv1D(num_classes, 1, activation='softmax')(y)
 
     return Model(inputs=x, outputs=y)
 
