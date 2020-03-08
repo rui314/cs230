@@ -71,8 +71,8 @@ def sample_generator(initial_epoch):
         noise = np.array(list(itertools.islice(noise, batch_size)))
         mixed = sound * 0.8 + noise * 0.2
 
-        x = ulaw(sound).reshape((batch_size, num_samples, 1))
-        y = (ulaw(mixed)+128).reshape((batch_size, num_samples, 1))
+        x = ulaw(mixed).reshape((batch_size, num_samples, 1))
+        y = (ulaw(sound * 0.8)+128).reshape((batch_size, num_samples, 1))
         yield x, y
 
 # Create a keras model

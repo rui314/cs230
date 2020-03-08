@@ -34,34 +34,31 @@ def ulaw_reverse(ys):
 
 model = keras.models.load_model(sys.argv[1])
 
-xs = []
-ys = []
+for i in range(10):
+    sound, _ = sf.read('validate-clean-16k.raw', format='RAW', subtype='PCM_16', samplerate=rate, channels=1,
+                       start=rate*i*60, frames=rate*5)
 
-sound, _ = sf.read('validate-clean-16k.raw', format='RAW', subtype='PCM_16', samplerate=rate, channels=1,
-                   start=rate*300, frames=rate*30)
+    noise, _ = sf.read('validate-noise-16k.raw', format='RAW', subtype='PCM_16', samplerate=rate, channels=1,
+                       start=rate*i*60, frames=rate*5)
 
-noise, _ = sf.read('validate-noise-16k.raw', format='RAW', subtype='PCM_16', samplerate=rate, channels=1,
-                   start=rate*300, frames=rate*30)
+    mixed = sound * 0.8 + noise * 0.2
 
-mixed = sound * 0.8 + noise * 0.2
+    x = ulaw(mixed)
 
-x = ulaw(mixed)
+    y = model.predict(x.reshape(1, -1, 1))[0]
+    y = np.argmax(y, axis=-1) - 128
 
-y = model.predict(x.reshape(1, -1, 1))[0]
-y = np.argmax(y, axis=-1) - 128
+    print(x[4000:4050])
+    print(y[4000:4050])
+    print(np.abs((x - y)[4000:4050]))
+    print()
 
-print(x[4000:4050])
-print(y[4000:4050])
-print(np.abs((x - y)[4000:4050]))
-print()
+    t = ulaw(sound * 0.8)
+    print(t[4000:4050])
+    print(y[4000:4050])
+    print(np.abs((t - y)[4000:4050]))
+    print()
+    print()
 
-t = ulaw(sound)
-print(t[4000:4050])
-print(y[4000:4050])
-print(np.abs((t - y)[4000:4050]))
-print()
-
-y = ulaw_reverse(y)
-
-sf.write(b'out.wav', y, rate)
-sf.write(b'out2.wav', ulaw_reverse(x), rate)
+    sf.write('generated-files/input-%d.wav' % i, ulaw_reverse(x), rate)
+    sf.write('generated-files/output-%d.wav' % i, ulaw_reverse(y), rate)
