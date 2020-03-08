@@ -38,10 +38,10 @@ xs = []
 ys = []
 
 sound, _ = sf.read('validate-clean-16k.raw', format='RAW', subtype='PCM_16', samplerate=rate, channels=1,
-                   start=rate*250, frames=rate*30)
+                   start=rate*300, frames=rate*30)
 
 noise, _ = sf.read('validate-noise-16k.raw', format='RAW', subtype='PCM_16', samplerate=rate, channels=1,
-                   start=rate*100, frames=rate*30)
+                   start=rate*300, frames=rate*30)
 
 mixed = sound * 0.8 + noise * 0.2
 

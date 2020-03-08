@@ -64,7 +64,7 @@ def read_audio(filename, initial_epoch):
 # We assume clean samples are 1-channel 8kHz
 def sample_generator(initial_epoch):
     speech = read_audio('train-16k.raw', initial_epoch)
-    noise = read_audio('noise-normalized-16k.raw', initial_epoch)
+    noise = read_audio('noise-16k.raw', initial_epoch)
 
     while True:
         sound = np.array(list(itertools.islice(speech, batch_size)))
