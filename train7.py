@@ -77,20 +77,25 @@ def sample_generator(initial_epoch):
             sf.write('y.wav', ulaw_reverse(ulaw(speech.flatten() * 0.8)), sample_rate)
         i += 1
 
-        x = (ulaw(mixed)+128).reshape((batch_size, num_samples, 1))
-        y = (ulaw(speech * 0.8)+128).reshape((batch_size, num_samples, 1))
+        x = ulaw(mixed) + 128
+        x = keras.utils.to_categorical(x, num_classes)
+        x = x.reshape((batch_size, num_samples, num_classes))
+
+        y = ulaw(speech * 0.8) + 128
+        x = keras.utils.to_categorical(y, num_classes)
+        y = y.reshape((batch_size, num_samples, num_classes))
         yield x, y
 
 # Create a keras model
 def get_model():
-    x = Input(shape=(None, 1))
+    x = Input(shape=(None, num_classes))
     y = x
 
     kernel_size = 3
-    residual_channel = 32
+    residual_channel = 512
     skip_channel = 512
     dilation_depth = 8
-    repeat = 5
+    repeat = 2
     skip_connections = []
 
     for dilation_rate in [3**i for i in range(dilation_depth)] * repeat:
@@ -98,8 +103,10 @@ def get_model():
         y1 = Conv1D(residual_channel, kernel_size, padding='same', dilation_rate=dilation_rate, activation='tanh')(y)
         y2 = Conv1D(residual_channel, kernel_size, padding='same', dilation_rate=dilation_rate, activation='sigmoid')(y)
         y = y1 * y2
-        skip_connections.append(Conv1D(skip_channel, 1)(y))
+        skip = Conv1D(skip_channel, 1)(y)
+        skip_connections.append(Dropout(dropout)(skip))
         y = y + res
+        y = Dropout(dropout)(y)
 
     y = Add()(skip_connections)
     y = Activation('relu')(y)
@@ -112,7 +119,7 @@ mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
     model = get_model()
 
-model.compile(keras.optimizers.Adam(), loss='sparse_categorical_crossentropy', metrics=['sparse_categorical_accuracy'])
+model.compile(keras.optimizers.Adam(), loss='categorical_crossentropy', metrics=['categorical_accuracy'])
 model.summary()
 
 if len(sys.argv) == 2:
