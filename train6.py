@@ -83,7 +83,7 @@ def get_model():
     kernel_size = 3
     residual_channel = 32
     skip_channel = 512
-    dilation_depth = 9
+    dilation_depth = 8
     repeat = 5
     skip_connections = []
 
