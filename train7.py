@@ -15,11 +15,11 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, CSVLogger, LambdaCallback
 from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
-batch_size = 8
+batch_size = 4
 initial_epoch = 0
 sample_rate = 16000
 num_classes = 256
-num_samples = 16000 * 2
+num_samples = 16000
 
 # policy = mixed_precision.Policy('mixed_float16')
 # mixed_precision.set_policy(policy)
@@ -77,18 +77,13 @@ def sample_generator(initial_epoch):
             sf.write('y.wav', ulaw_reverse(ulaw(speech.flatten() * 0.8)), sample_rate)
         i += 1
 
-        x = ulaw(mixed) + 128
-        x = keras.utils.to_categorical(x, num_classes)
-        x = x.reshape((batch_size, num_samples, num_classes))
-
-        y = ulaw(speech * 0.8) + 128
-        x = keras.utils.to_categorical(y, num_classes)
-        y = y.reshape((batch_size, num_samples, num_classes))
+        x = (ulaw(mixed)+128).reshape((batch_size, num_samples, 1))
+        y = (ulaw(speech * 0.8)+128).reshape((batch_size, num_samples, 1))
         yield x, y
 
 # Create a keras model
 def get_model():
-    x = Input(shape=(None, num_classes))
+    x = Input(shape=(None, 1))
     y = x
 
     kernel_size = 3
@@ -96,15 +91,17 @@ def get_model():
     skip_channel = 512
     dilation_depth = 8
     repeat = 2
+    dropout = 0.05
     skip_connections = []
+
+    y = Conv1D(residual_channel, 1)(y)
 
     for dilation_rate in [3**i for i in range(dilation_depth)] * repeat:
         res = y
         y1 = Conv1D(residual_channel, kernel_size, padding='same', dilation_rate=dilation_rate, activation='tanh')(y)
         y2 = Conv1D(residual_channel, kernel_size, padding='same', dilation_rate=dilation_rate, activation='sigmoid')(y)
         y = y1 * y2
-        skip = Conv1D(skip_channel, 1)(y)
-        skip_connections.append(Dropout(dropout)(skip))
+        skip_connections.append(Conv1D(skip_channel, 1)(y))
         y = y + res
         y = Dropout(dropout)(y)
 
@@ -119,7 +116,7 @@ mirrored_strategy = tf.distribute.MirroredStrategy()
 with mirrored_strategy.scope():
     model = get_model()
 
-model.compile(keras.optimizers.Adam(), loss='categorical_crossentropy', metrics=['categorical_accuracy'])
+model.compile(keras.optimizers.Adam(), loss='sparse_categorical_crossentropy', metrics=['sparse_categorical_accuracy'])
 model.summary()
 
 if len(sys.argv) == 2:
@@ -131,7 +128,7 @@ cp1 = ModelCheckpoint(filepath='./model/weights-{epoch:04d}.h5',
                       verbose=0,
                       save_best_only=False,
                       save_weights_only=False,
-                      save_freq=1)
+                      save_freq=100)
 
 cp2 = CSVLogger('training.log', append=True)
 cp3 = ReduceLROnPlateau('loss', patience=30)
