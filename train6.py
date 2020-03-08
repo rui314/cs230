@@ -63,16 +63,16 @@ def read_audio(filename, initial_epoch):
 
 # We assume clean samples are 1-channel 8kHz
 def sample_generator(initial_epoch):
-    speech = read_audio('train-16k.raw', initial_epoch)
-    noise = read_audio('noise-16k.raw', initial_epoch)
+    speech_gen = read_audio('train-16k.raw', initial_epoch)
+    noise_gen = read_audio('noise-16k.raw', initial_epoch)
 
     while True:
-        sound = np.array(list(itertools.islice(speech, batch_size)))
-        noise = np.array(list(itertools.islice(noise, batch_size)))
-        mixed = sound * 0.8 + noise * 0.2
+        speech = np.array(list(itertools.islice(speech_gen, batch_size)))
+        noise = np.array(list(itertools.islice(noise_gen, batch_size)))
+        mixed = speech * 0.8 + noise * 0.2
 
-        x = ulaw(mixed).reshape((batch_size, num_samples, 1))
-        y = (ulaw(sound * 0.8)+128).reshape((batch_size, num_samples, 1))
+        x = (ulaw(mixed)+128).reshape((batch_size, num_samples, 1))
+        y = (ulaw(speech * 0.8)+128).reshape((batch_size, num_samples, 1))
         yield x, y
 
 # Create a keras model

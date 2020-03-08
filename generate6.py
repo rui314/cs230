@@ -43,10 +43,10 @@ for i in range(10):
 
     mixed = sound * 0.8 + noise * 0.2
 
-    x = ulaw(mixed)
+    x = ulaw(mixed) + 128
 
     y = model.predict(x.reshape(1, -1, 1))[0]
-    y = np.argmax(y, axis=-1) - 128
+    y = np.argmax(y, axis=-1)
 
     print(x[4000:4050])
     print(y[4000:4050])
@@ -60,5 +60,5 @@ for i in range(10):
     print()
     print()
 
-    sf.write('generated-files/input-%d.wav' % i, ulaw_reverse(x), rate)
-    sf.write('generated-files/output-%d.wav' % i, ulaw_reverse(y), rate)
+    sf.write('generated-files/input-%d.wav' % i, ulaw_reverse(x-128), rate)
+    sf.write('generated-files/output-%d.wav' % i, ulaw_reverse(y-128), rate)
